@@ -165,3 +165,9 @@ pray carlo --for "tonight's deploy" >> deploy.log
 | `--lang <code>` | Language: `en` (default) or `la` |
 | `--tag <tag>` | With `pray list`: only prayers with this tag, e.g. `marian` |
 | `-h`, `--help` | Help for `pray` or any command, e.g. `pray copy --help` |
+
+# Coming Soon...
+1. `rosary` mode! 
+2. more prayers
+3. more languages
+4. your contributions!
