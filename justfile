@@ -8,9 +8,11 @@ default:
 build:
     go build -o {{bin}} ./cmd/pray
 
-# run the cli, passing through args, e.g. `just run pray`
+# run the cli, passing through args, e.g. `just run hail mary --for "Mam & Dad"`
+# (positional-arguments passes each arg through untouched, quotes and all)
+[positional-arguments]
 run *args:
-    go run ./cmd/pray {{args}}
+    go run ./cmd/pray "$@"
 
 # run tests
 test:
