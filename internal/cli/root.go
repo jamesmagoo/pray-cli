@@ -25,7 +25,14 @@ var rootCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "%s\n\n%s\n", p.Title, p.Text(intention))
+		out := cmd.OutOrStdout()
+		fmt.Fprintf(out, "%s\n\n", p.Title)
+		// Name the intention first, as you would aloud, unless the prayer
+		// has its own place for it in the text.
+		if intention != "" && !p.HasIntentionSlot() {
+			fmt.Fprintf(out, "For %s\n\n", intention)
+		}
+		fmt.Fprintln(out, p.Text(intention))
 		return nil
 	},
 }

@@ -59,6 +59,12 @@ func (p Prayer) Text(intention string) string {
 	return strings.ReplaceAll(p.Body, "{{intention}}", intention)
 }
 
+// HasIntentionSlot reports whether the text has a place for an intention.
+// Prayers without one show the intention as a line before the prayer instead.
+func (p Prayer) HasIntentionSlot() bool {
+	return strings.Contains(p.Body, "{{intention}}")
+}
+
 // splitTitle takes "# Title" off the first line; the rest is the body.
 func splitTitle(s string) (title, body string) {
 	s = strings.TrimSpace(s)
