@@ -64,6 +64,7 @@ pray list
 
 ```
 hail-mary         Hail Mary                                       en la
+our-father        Our Father                                      en la
 st-carlo-acutis   Prayer of Intercession for Technical Problems   en
 ```
 
