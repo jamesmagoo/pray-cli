@@ -10,6 +10,12 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
+// Each prayer is a folder in data/:
+//
+//	data/<id>/meta.yaml   aliases, tags, default intention (shared by all languages)
+//	data/<id>/en.md       "# Title", a blank line, then the text
+//	data/<id>/la.md       other languages alongside, named by language code
+//
 //go:embed data
 var dataFS embed.FS
 
@@ -21,6 +27,34 @@ type Prayer struct {
 	Intention string   `yaml:"intention"` // default when none is given
 	Aliases   []string `yaml:"aliases"`
 	Tags      []string `yaml:"tags"`
+}
+
+// IDs lists every prayer, sorted.
+func IDs() ([]string, error) {
+	entries, err := fs.ReadDir(dataFS, "data")
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for _, e := range entries {
+		if e.IsDir() {
+			ids = append(ids, e.Name())
+		}
+	}
+	return ids, nil
+}
+
+// Langs lists the languages a prayer is written in, e.g. [en la].
+func Langs(id string) ([]string, error) {
+	files, err := fs.Glob(dataFS, path.Join("data", id, "*.md"))
+	if err != nil {
+		return nil, err
+	}
+	langs := make([]string, len(files))
+	for i, f := range files {
+		langs[i] = strings.TrimSuffix(path.Base(f), ".md")
+	}
+	return langs, nil
 }
 
 // Get loads a prayer by id in the given language, falling back to English.
