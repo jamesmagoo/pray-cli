@@ -13,6 +13,7 @@ import (
 )
 
 var lang string
+var intention string
 
 var rootCmd = &cobra.Command{
 	Use:          "pray <prayer>",
@@ -20,14 +21,11 @@ var rootCmd = &cobra.Command{
 	Args:         cobra.MinimumNArgs(1),
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// "pray hail mary" → "hail-mary" until proper matching exists
-		id := strings.ToLower(strings.Join(args, "-"))
-
-		p, err := prayers.Get(id, lang)
+		p, err := prayers.Find(strings.Join(args, " "), lang)
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "%s\n\n%s\n", p.Title, p.Body)
+		fmt.Fprintf(cmd.OutOrStdout(), "%s\n\n%s\n", p.Title, p.Text(intention))
 		return nil
 	},
 }
@@ -52,4 +50,5 @@ func init() {
 	// when this action is called directly.
 	//rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	rootCmd.PersistentFlags().StringVar(&lang, "lang", "en", "prayer language (en, la)")
+	rootCmd.Flags().StringVar(&intention, "for", "", `fill the prayer's intention, e.g. --for "my mother, a job, the servers deploy"`)
 }

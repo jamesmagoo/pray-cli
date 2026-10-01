@@ -14,12 +14,13 @@ import (
 var dataFS embed.FS
 
 type Prayer struct {
-	ID      string
-	Lang    string // the language actually used, after fallback
-	Title   string
-	Body    string
-	Aliases []string `yaml:"aliases"`
-	Tags    []string `yaml:"tags"`
+	ID        string
+	Lang      string // the language actually used, after fallback
+	Title     string
+	Body      string
+	Intention string   `yaml:"intention"` // default when none is given
+	Aliases   []string `yaml:"aliases"`
+	Tags      []string `yaml:"tags"`
 }
 
 // Get loads a prayer by id in the given language, falling back to English.
@@ -47,6 +48,15 @@ func Get(id, lang string) (Prayer, error) {
 	p.Lang = lang
 	p.Title, p.Body = splitTitle(string(text))
 	return p, nil
+}
+
+// Text returns the body with {{intention}} filled in, falling back to the
+// prayer's default intention.
+func (p Prayer) Text(intention string) string {
+	if intention == "" {
+		intention = p.Intention
+	}
+	return strings.ReplaceAll(p.Body, "{{intention}}", intention)
 }
 
 // splitTitle takes "# Title" off the first line; the rest is the body.
