@@ -2,6 +2,7 @@ package prayers
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -73,8 +74,18 @@ func TestEveryPrayerIsComplete(t *testing.T) {
 			if p.Body == "" {
 				t.Errorf("%s/%s.md: no text after the title", id, lang)
 			}
+			// Frames and crosses belong to the renderer, not the data: easy
+			// to paste in by accident, and they'd end up on the clipboard.
+			if strings.ContainsFunc(p.Title+p.Body, isDecoration) {
+				t.Errorf("%s/%s.md: contains frame or block characters", id, lang)
+			}
 		}
 	}
+}
+
+// isDecoration reports box-drawing and block characters (═ ║ █ …).
+func isDecoration(r rune) bool {
+	return r >= 0x2500 && r <= 0x259F
 }
 
 // Every prayer with an {{intention}} slot needs a default, or running it

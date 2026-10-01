@@ -21,20 +21,18 @@ var rootCmd = &cobra.Command{
 	Args:         cobra.MinimumNArgs(1),
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		p, err := prayers.Find(strings.Join(args, " "), lang)
+		p, err := findPrayer(args)
 		if err != nil {
 			return err
 		}
-		out := cmd.OutOrStdout()
-		fmt.Fprintf(out, "%s\n\n", p.Title)
-		// Name the intention first, as you would aloud, unless the prayer
-		// has its own place for it in the text.
-		if intention != "" && !p.HasIntentionSlot() {
-			fmt.Fprintf(out, "For %s\n\n", intention)
-		}
-		fmt.Fprintln(out, p.Text(intention))
+		fmt.Fprintln(cmd.OutOrStdout(), p.Plain(intention))
 		return nil
 	},
+}
+
+// findPrayer looks up what the user typed, e.g. ["hail", "mary"].
+func findPrayer(args []string) (prayers.Prayer, error) {
+	return prayers.Find(strings.Join(args, " "), lang)
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -57,5 +55,5 @@ func init() {
 	// when this action is called directly.
 	//rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	rootCmd.PersistentFlags().StringVar(&lang, "lang", "en", "prayer language (en, la)")
-	rootCmd.Flags().StringVar(&intention, "for", "", `fill the prayer's intention, e.g. --for "my mother, a job, the servers deploy"`)
+	rootCmd.PersistentFlags().StringVar(&intention, "for", "", `fill the prayer's intention, e.g. --for "my mother, a job, the servers deploy"`)
 }

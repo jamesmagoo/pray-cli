@@ -48,6 +48,36 @@ func TestIntentionWovenIntoSlot(t *testing.T) {
 	}
 }
 
+// pray copy must always put plain text on the clipboard, whatever pray
+// prints in a terminal: no colour codes, and no frames or block-character
+// crosses from the renderer.
+func TestCopyIsPlainText(t *testing.T) {
+	var copied string
+	original := writeClipboard
+	writeClipboard = func(s string) error { copied = s; return nil }
+	t.Cleanup(func() { writeClipboard = original })
+
+	out := run(t, "copy", "hail", "mary", "--for", "my mum")
+
+	p, err := prayers.Find("hail mary", "en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if copied != p.Plain("my mum") {
+		t.Fatalf("clipboard isn't the prayer's plain text:\n%s", copied)
+	}
+	if strings.Contains(copied, "\x1b") {
+		t.Fatal("clipboard contains terminal colour codes")
+	}
+	isDecoration := func(r rune) bool { return r >= 0x2500 && r <= 0x259F } // ═ ║ █ …
+	if strings.IndexFunc(copied, isDecoration) >= 0 {
+		t.Fatal("clipboard contains frame or block characters")
+	}
+	if !strings.Contains(out, "Copied Hail Mary") || strings.Contains(out, "full of grace") {
+		t.Fatalf("want only a confirmation, got:\n%s", out)
+	}
+}
+
 // Cobra checks the first word for a subcommand before any prayer lookup, so
 // a prayer whose id, alias or title starts with a subcommand name ("list",
 // "copy", "rosary"…) could never be reached that way. Subcommands are read

@@ -14,7 +14,7 @@ run *args:
 
 # run tests
 test:
-    go test ./... -v
+    go test ./...
 
 # print every prayer and its metadata (id, title, lang, aliases, tags, body)
 debug:

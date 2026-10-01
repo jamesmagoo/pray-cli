@@ -99,6 +99,22 @@ func (p Prayer) HasIntentionSlot() bool {
 	return strings.Contains(p.Body, "{{intention}}")
 }
 
+// Plain is the prayer as plain text: the title, the intention line, then the
+// prayer, with no trailing newline. It never contains colour or decoration,
+// so it is what gets copied to the clipboard, piped or logged. Rendering for
+// the terminal is separate and builds on the same parts.
+func (p Prayer) Plain(intention string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s\n\n", p.Title)
+	// Name the intention first, as you would aloud, unless the prayer
+	// has its own place for it in the text.
+	if intention != "" && !p.HasIntentionSlot() {
+		fmt.Fprintf(&b, "For %s\n\n", intention)
+	}
+	b.WriteString(p.Text(intention))
+	return b.String()
+}
+
 // splitTitle takes "# Title" off the first line; the rest is the body.
 func splitTitle(s string) (title, body string) {
 	s = strings.TrimSpace(s)
