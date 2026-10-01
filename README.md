@@ -35,3 +35,112 @@ Pray cli allows you to bring prayer into the command line interface - whether th
 ║                                                                                ║
 ╚════════════════════════════════════════════════════════════════════════════════╝
 ```
+
+## Getting started
+
+### Install
+
+You'll need Go 1.25 or newer.
+
+```sh
+go install github.com/jamesmagoo/pray-cli/cmd/pray@latest
+```
+
+This puts `pray` in `$(go env GOPATH)/bin`, so make sure that folder is on your `PATH`.
+
+Or build it from a clone:
+
+```sh
+git clone https://github.com/jamesmagoo/pray-cli
+cd pray-cli
+just install        # or: go install ./cmd/pray
+```
+
+### Pray
+
+Type `pray` and the name of a prayer:
+
+```sh
+pray hail mary
+```
+
+```
+Hail Mary
+
+Hail Mary, full of grace,
+the Lord is with thee.
+Blessed art thou amongst women,
+and blessed is the fruit of thy womb, Jesus.
+
+Holy Mary, Mother of God,
+pray for us sinners,
+now and at the hour of our death.
+
+Amen.
+```
+
+You don't need the exact name. `pray` matches a prayer's name, title and nicknames, and the start of any word in them:
+
+```sh
+pray ave            # a nickname for the Hail Mary
+pray carlo          # the Prayer of Intercession for Technical Problems
+pray saint carlo    # "saint", "st" and "st." all work
+pray acut           # the start of a word is enough
+```
+
+If what you type could mean more than one prayer, `pray` lists the options so you can be more specific.
+
+### Pray for someone or something
+
+Add an intention with `--for`:
+
+```sh
+pray hail mary --for "my mum"
+pray carlo --for "the server migration"
+```
+
+Some prayers have a place for the intention in their text. The St. Carlo prayer, for example, asks for help "specifically for the server migration". Otherwise the intention is named before the prayer, as you would say it aloud:
+
+```
+Hail Mary
+
+For my mum
+
+Hail Mary, full of grace,
+…
+```
+
+### Pray in Latin
+
+```sh
+pray hail mary --lang la      # Ave Maria
+```
+
+If a prayer hasn't been translated yet, you get the English.
+
+### Copy a prayer
+
+```sh
+pray copy hail mary
+pray copy carlo --for "the release"
+```
+
+This puts the prayer on your clipboard as plain text, ready to paste into a message, a document or a commit. On Linux it needs `xclip`, `xsel` or `wl-clipboard` installed.
+
+### Use it in scripts
+
+When the output is piped or redirected, `pray` always writes plain text, so it's safe to log:
+
+```sh
+#!/bin/sh
+pray carlo --for "tonight's deploy" >> deploy.log
+./deploy.sh
+```
+
+### Options
+
+| Option | What it does |
+|---|---|
+| `--for "<intention>"` | Pray for someone or something |
+| `--lang <code>` | Language: `en` (default) or `la` |
+| `-h`, `--help` | Help for `pray` or any command, e.g. `pray copy --help` |
