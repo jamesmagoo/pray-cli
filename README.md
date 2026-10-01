@@ -56,6 +56,26 @@ cd pray-cli
 just install        # or: go install ./cmd/pray
 ```
 
+### See what's available
+
+```sh
+pray list
+```
+
+```
+hail-mary         Hail Mary                                       en la
+st-carlo-acutis   Prayer of Intercession for Technical Problems   en
+```
+
+Each line shows the prayer's name, its title and the languages it's
+available in. Running `pray` on its own shows the same list. Narrow it down
+by tag, or see the titles in Latin:
+
+```sh
+pray list --tag marian
+pray list --lang la
+```
+
 ### Pray
 
 Type `pray` and the name of a prayer:
@@ -143,4 +163,5 @@ pray carlo --for "tonight's deploy" >> deploy.log
 |---|---|
 | `--for "<intention>"` | Pray for someone or something |
 | `--lang <code>` | Language: `en` (default) or `la` |
+| `--tag <tag>` | With `pray list`: only prayers with this tag, e.g. `marian` |
 | `-h`, `--help` | Help for `pray` or any command, e.g. `pray copy --help` |

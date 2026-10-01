@@ -12,11 +12,14 @@ import (
 // run executes the root command with args and returns what it printed.
 func run(t *testing.T, args ...string) string {
 	t.Helper()
-	intention, lang = "", "en" // flags are package globals; reset between runs
+	intention, lang, listTag = "", "en", "" // flags are package globals; reset between runs
 
 	var out bytes.Buffer
 	rootCmd.SetOut(&out)
 	rootCmd.SetErr(&out)
+	if args == nil {
+		args = []string{} // nil would make Cobra read the test binary's own os.Args
+	}
 	rootCmd.SetArgs(args)
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("pray %s: %v", strings.Join(args, " "), err)

@@ -16,11 +16,20 @@ var lang string
 var intention string
 
 var rootCmd = &cobra.Command{
-	Use:          "pray <prayer>",
+	Use:          "pray [prayer]",
 	Short:        "Prayers in your terminal",
-	Args:         cobra.MinimumNArgs(1),
+	Args:         cobra.ArbitraryArgs,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Bare `pray`: show what's available rather than an error.
+		if len(args) == 0 {
+			if err := printList(cmd.OutOrStdout(), ""); err != nil {
+				return err
+			}
+			fmt.Fprintln(cmd.ErrOrStderr(), "\nPray one with: pray <name>")
+			return nil
+		}
+
 		p, err := findPrayer(args)
 		if err != nil {
 			return err
