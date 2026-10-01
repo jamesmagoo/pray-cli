@@ -16,6 +16,10 @@ run *args:
 test:
     go test ./...
 
+# print every prayer and its metadata (id, title, lang, aliases, tags, body)
+debug:
+    go run ./internal/prayers/cmd/debug
+
 # run tests with coverage report
 cover:
     go test -coverprofile=coverage.out ./...
