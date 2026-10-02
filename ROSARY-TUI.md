@@ -448,6 +448,7 @@ every position and visibly distorts the shape. `int(math.Round(x))` is correct.
 | `animate.go` | *Time*: the bead's flare, the prayer's fade-in, the farewell's fade-out |
 | `model.go` | *State and the loop*: the Bubble Tea `Model` |
 | `phase.go` | Which of the three screens is showing: chooser, rosary, close |
+| `cross.go` | The crucifix: line-drawn art, and the cells it occupies |
 | `run.go` | Entry point; the only thing `internal/cli` touches |
 
 The ordering is deliberate: structure → geometry → colour. Each layer depends
@@ -1845,9 +1846,57 @@ Same-class pairs, all safe:
 | | `⭘` `○` | two rings, more delicate |
 | | `●` `·` | smalls recede to a thread |
 
-`TestBeadGlyphsShareAWidthClass` enforces it. The crucifix is deliberately **not**
-checked — `✠` is class N, but it sits alone on its row with no bead beside it to
-disagree with, and requiring class A would rule out every cross glyph for no gain.
+`TestBeadGlyphsShareAWidthClass` enforces it for the two bead glyphs.
+
+#### The crucifix: drawn from lines, for exactly this reason
+
+`✠` (U+2720 MALTESE CROSS) is class **N**, so it had the same problem — measured
+off a screenshot, its painted centre sat about **17px** right of the pendant's
+column, roughly half the 42px error the old `⬤` had.
+
+There is no good single-glyph fix. Almost every cross glyph is class N — `✝ ✞ ☩ ✚
+✛ ✜ ⸸` all are; the only class-A options are `†` and `‡`, which read as daggers.
+
+So the rosary's crucifix is **assembled from box-drawing characters**, which are
+class A throughout and are designed to join across cell boundaries:
+
+```
+  ┃
+━━╋━━
+  ┃
+  ┃
+```
+
+It lines up with the pendant exactly, and no font can push it off — see
+`cross.go`, where the art is declared once and the grid write, the colour pass,
+the canvas height and the collision check all derive from it.
+
+**The cost, which is real.** The crucifix is no longer one cell, and three things
+had to follow:
+
+1. `drawRosary` stamps it as a block rather than calling `c.set` once.
+2. `styleGrid`'s map is keyed by position, so **every** cell of the cross is
+   registered — a cross that registered only its stem would have its arms coloured
+   by the fallback branch, which treats anything unclaimed as the mystery text.
+3. The canvas grew by `crossRows()`. `canvas.set` silently ignores out-of-bounds
+   writes, so a canvas one row short loses the cross's foot with no error anywhere.
+
+`Cross.Glyph()` survives, returning the crossbar `╋` — the one cell unique to the
+cross — so "find the crucifix on screen" is still a single call.
+
+#### …except on the farewell, which keeps `✠`
+
+The closing screen shows the single glyph. The lines exist to hold the crucifix
+true to the pendant's column; the farewell has no column, just a cross above three
+words, so nothing can be out of true and the handsomer glyph wins:
+
+```
+     ✠
+
+Go in peace.
+```
+
+That is `malteseCross` in `cross.go`, deliberately separate from `Cross.Glyph()`.
 
 ### The colours
 

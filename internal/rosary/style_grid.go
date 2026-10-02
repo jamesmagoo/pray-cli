@@ -20,6 +20,16 @@ func styleGrid(c *canvas, g ringGeometry, beads []Bead, cursor, glow, fade int) 
 	}
 	at := make(map[[2]int]beadAt, len(beads))
 	for i, b := range beads {
+		// The crucifix covers several cells (see cross.go), so every one of them is
+		// registered. Registering only its bead position would leave the arms to be
+		// coloured by the fallback below, which treats anything unclaimed as the
+		// mystery text inside the ring.
+		if b.Kind == Cross {
+			for cell := range crossCells(g.pos[i]) {
+				at[cell] = beadAt{kind: Cross, current: i == cursor}
+			}
+			continue
+		}
 		at[g.pos[i]] = beadAt{kind: b.Kind, current: i == cursor}
 	}
 

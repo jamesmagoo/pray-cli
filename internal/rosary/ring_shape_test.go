@@ -275,3 +275,97 @@ func eastAsianWidthClass(glyph string) string {
 	}
 	return "?"
 }
+
+// The crucifix's stem sits on the pendant's column, and its arms are symmetric
+// about it.
+//
+// This is the whole reason the cross is drawn from box-drawing lines rather than
+// as a single glyph. Every cross glyph worth using (✠ ✝ ✞ ☩ ✚) is East Asian
+// Width class N while the beads are class A, and a font may paint a class-N glyph
+// wider than its cell — the overflow goes rightward and the cross drifts off the
+// centre line. The box-drawing block is class A throughout, so this alignment is
+// one the font cannot undo.
+func TestTheCrucifixIsCentredOnThePendant(t *testing.T) {
+	m := praying(t)
+	g := m.ring
+
+	// Find the crucifix's bead.
+	cross := -1
+	for i, b := range m.beads {
+		if b.Kind == Cross {
+			cross = i
+			break
+		}
+	}
+	if cross < 0 {
+		t.Fatal("the rosary has no crucifix")
+	}
+
+	cells := crossCells(g.pos[cross])
+	if len(cells) == 0 {
+		t.Fatal("the crucifix occupies no cells")
+	}
+
+	// The stem: every row of the cross must have a cell on the pendant's column.
+	minY, maxY := 1<<30, -1
+	minX, maxX := 1<<30, -1
+	for c := range cells {
+		minY, maxY = min(minY, c[1]), max(maxY, c[1])
+		minX, maxX = min(minX, c[0]), max(maxX, c[0])
+	}
+	for y := minY; y <= maxY; y++ {
+		if _, ok := cells[[2]int{g.cx, y}]; !ok {
+			t.Errorf("row %d of the crucifix has nothing on the pendant's column %d", y, g.cx)
+		}
+	}
+
+	// And the arms reach equally far either side, so the cross reads as centred
+	// rather than merely as touching the column.
+	if left, right := g.cx-minX, maxX-g.cx; left != right {
+		t.Errorf("the crucifix reaches %d cells left of centre and %d right; it is lopsided",
+			left, right)
+	}
+}
+
+// Every cell of the crucifix is drawn, and none is clipped off the canvas.
+//
+// canvas.set silently ignores out-of-bounds writes, so a canvas one row too short
+// loses the cross's foot with no error anywhere — exactly the kind of fault that
+// is invisible until someone looks at the screen.
+func TestTheWholeCrucifixFitsOnTheCanvas(t *testing.T) {
+	m := praying(t)
+	g := m.ring
+
+	cross := -1
+	for i, b := range m.beads {
+		if b.Kind == Cross {
+			cross = i
+			break
+		}
+	}
+	if cross < 0 {
+		t.Fatal("the rosary has no crucifix")
+	}
+
+	for c := range crossCells(g.pos[cross]) {
+		if c[0] < 0 || c[0] >= g.w || c[1] < 0 || c[1] >= g.h {
+			t.Errorf("the crucifix's cell %v falls outside the %dx%d canvas", c, g.w, g.h)
+		}
+	}
+
+	// And it really is on screen: count the drawn runes against the art's.
+	drawn := 0
+	out := plain(drawRosary(g, m.beads, 30, 0, 0, nil))
+	for _, r := range out {
+		for _, line := range crossArt {
+			for _, want := range line {
+				if want != ' ' && r == want {
+					drawn++
+				}
+			}
+		}
+	}
+	if drawn == 0 {
+		t.Error("none of the crucifix was drawn")
+	}
+}

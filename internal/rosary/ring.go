@@ -192,7 +192,10 @@ func layout(beads []Bead, textW, textH int) ringGeometry {
 	g := ringGeometry{
 		rx: rx, ry: ry,
 		w: rx*2 + 5,
-		h: ry*2 + 3 + pendantRows() + 1,
+		// crossRows() is the crucifix hanging BELOW its own bead: it is a block, not
+		// a single cell, and canvas.set silently ignores out-of-bounds writes, so a
+		// canvas one row short loses the cross's foot with no error anywhere.
+		h: ry*2 + 3 + pendantRows() + crossRows() + 1,
 	}
 	g.cx, g.cy = centre(rx, ry)
 	// The first pendantLen beads hang below the ring, in a line from the gap; the
@@ -440,12 +443,20 @@ func drawRosary(g ringGeometry, beads []Bead, cursor, glow, fade int, lines []st
 			continue
 		}
 
+		// The crucifix is several cells, not one: it is drawn from box-drawing lines
+		// so that it lines up with the pendant (see cross.go). It is stamped as a
+		// block and never becomes a halo — its shape carries meaning, and swapping
+		// it for a bead would make the cross vanish exactly when you are praying the
+		// Sign of the Cross on it. It shows selection by colour and weight instead.
+		if b.Kind == Cross {
+			for cell, r := range crossCells(g.pos[i]) {
+				c.set(cell[0], cell[1], r)
+			}
+			continue
+		}
+
 		glyph := b.Kind.Glyph()
-		// The cursor normally becomes a halo, but not on the crucifix: its shape
-		// carries meaning, and swapping it for a bead would make the cross vanish
-		// exactly when you are praying the Sign of the Cross on it. The cross
-		// shows selection by colour and weight instead.
-		if onBead && i == cursor && b.Kind != Cross {
+		if onBead && i == cursor {
 			glyph = currentGlyph(glow)
 		}
 		c.set(g.pos[i][0], g.pos[i][1], []rune(glyph)[0])

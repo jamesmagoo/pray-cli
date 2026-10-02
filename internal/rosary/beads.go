@@ -63,7 +63,14 @@ var (
 func (k Kind) Glyph() string {
 	switch k {
 	case Cross:
-		return "✠"
+		// The crucifix is NOT one glyph — it is a block of box-drawing lines, so
+		// that it lines up with the pendant (see cross.go). This returns the one
+		// cell that identifies it: the crossing at the centre of its arms, which
+		// appears exactly once in the whole rosary and nowhere else.
+		//
+		// Kept so that "find the cross on screen" stays a single call, which is
+		// what the tests and the farewell screen want.
+		return crossMark()
 	case Small:
 		return smallBead
 	default:

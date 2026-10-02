@@ -211,8 +211,13 @@ func overlay(row, s string, x int) string {
 //
 // The cross rather than a bead: it is where the rosary begins and ends, and it is
 // the one glyph here that is not a bead among beads.
+//
+// It is the single-glyph "✠" rather than the ring's line-drawn crucifix. The lines
+// exist to keep the crucifix true to the pendant's column (see cross.go); here
+// there is no column, just a cross over three words, so the glyph that looks
+// better is the right one.
 func farewell(m model) string {
-	cross := departCrossStyle(m.depart).Render(Cross.Glyph())
+	cross := departCrossStyle(m.depart).Render(malteseCross)
 	words := departStyle(m.depart).Render(farewellWords)
 
 	// Centred as a block on the widest of the two, so the cross sits over the

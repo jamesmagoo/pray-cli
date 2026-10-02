@@ -329,23 +329,32 @@ func TestNoGapBetweenTheRosaryAndTheClosingText(t *testing.T) {
 
 	rows := strings.Split(plain(completion(m)), "\n")
 
-	cross := -1
+	// Measure from the crucifix's FOOT, not its crossbar. The cross is a block
+	// several rows tall (see cross.go), so Cross.Glyph() finds its middle; the gap
+	// that matters is below the last row it occupies.
 	text := -1
 	for i, r := range rows {
-		if strings.Contains(r, Cross.Glyph()) {
-			cross = i
-		}
 		if strings.Contains(r, "The rosary is prayed.") {
 			text = i
+			break
 		}
 	}
-	if cross < 0 || text < 0 {
-		t.Fatalf("crucifix at row %d, closing text at row %d; expected both", cross, text)
+	if text < 0 {
+		t.Fatal("the closing text is not on the screen")
+	}
+
+	// Walk back from the text to the last row the rosary actually occupies.
+	foot := text - 1
+	for foot >= 0 && blankRow(rows[foot]) {
+		foot--
+	}
+	if foot < 0 {
+		t.Fatal("no rosary above the closing text")
 	}
 
 	// One blank row between them: a deliberate breath, not four dead rows.
-	if gap := text - cross - 1; gap != 1 {
-		t.Errorf("%d rows between the crucifix and the closing text, want 1", gap)
+	if gap := text - foot - 1; gap != 1 {
+		t.Errorf("%d rows between the rosary and the closing text, want 1", gap)
 	}
 }
 
@@ -538,8 +547,14 @@ func TestTheFarewellShowsOnlyTheCrossAndTheWords(t *testing.T) {
 	if !strings.Contains(screen, farewellWords) {
 		t.Errorf("the farewell does not say %q", farewellWords)
 	}
-	if !strings.Contains(screen, Cross.Glyph()) {
-		t.Error("the farewell does not show the cross")
+	// The single-glyph cross, not the rosary's line-drawn one: the lines exist to
+	// hold the crucifix true to the pendant's column, and the farewell has no
+	// column. See farewell().
+	if !strings.Contains(screen, malteseCross) {
+		t.Errorf("the farewell does not show the cross %q", malteseCross)
+	}
+	if strings.Contains(screen, Cross.Glyph()) {
+		t.Error("the farewell draws the rosary's line-built crucifix; it should be the single glyph")
 	}
 	// Everything else is put down: no beads, no prayer, no keys.
 	if strings.Contains(screen, smallBead) || strings.Contains(screen, bigBead) {
