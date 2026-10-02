@@ -142,7 +142,56 @@ func mysteryLines(set MysterySet, announced int) []string {
 	//
 	// Plain text, because these rows are written onto the grid cell by cell and an
 	// escape sequence is not one cell wide. Colour is added in styleGrid.
-	return []string{set.Name, "", name}
+	rows := []string{set.Name, ""}
+	return append(rows, wrapMystery(name)...)
+}
+
+// mysteryWidth is the widest a mystery's name may be before it wraps.
+//
+// The ring is sized to clear whatever goes inside it, so an over-long name makes
+// the whole rosary grow: "The Coronation of the Blessed Virgin Mary" is 41 cells
+// and pushed the ring from 18x9 to 24x12 — which breaks the chain, since beads
+// then sit more than a row apart and leave empty rows down the sides.
+//
+// 28, chosen by measuring rather than by taste: it is the width at which the ring
+// comes out 18x9 — the size it was before the other three sets arrived, and the
+// size that keeps the beads one row apart with no gaps in the chain. Narrower
+// shrinks the ring and crowds them (at 24 the touching pairs go from 4 to 8);
+// wider grows it until rows appear with no bead on them at all.
+//
+// So this constant is really a dial on the RING, by way of the text it has to
+// clear. Change it and check TestTheRingHasNoBreaks.
+const mysteryWidth = 28
+
+// wrapMystery breaks a mystery's name onto as few lines as will fit mysteryWidth,
+// splitting only at spaces.
+//
+// Deliberately simple: these are short titles, not prose, and greedy wrapping puts
+// the break in a sensible place for every one of the twenty. If a future set needs
+// a particular break, give it one by shortening the name rather than teaching this
+// to hyphenate.
+func wrapMystery(name string) []string {
+	if lipgloss.Width(name) <= mysteryWidth {
+		return []string{name}
+	}
+
+	var lines []string
+	line := ""
+	for _, word := range strings.Fields(name) {
+		switch {
+		case line == "":
+			line = word
+		case lipgloss.Width(line)+1+lipgloss.Width(word) <= mysteryWidth:
+			line += " " + word
+		default:
+			lines = append(lines, line)
+			line = word
+		}
+	}
+	if line != "" {
+		lines = append(lines, line)
+	}
+	return lines
 }
 
 // place centres a block in the window, or returns it unplaced before the first
@@ -376,28 +425,79 @@ func placeFinished(m model, block string) string {
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, block)
 }
 
-// chooser is the first screen: pick the mysteries to contemplate.
+// chooser is the first screen: the title, then the mysteries to pick from.
+//
+// Two blocks with different alignments, which is the whole of the layout here:
+// the heading is CENTRED, because it is a title; the choices are LEFT-aligned,
+// because they are a list and a list needs a common left edge to scan down. Both
+// are padded to the same width before joining, since JoinVertical centres line by
+// line rather than block by block.
 func chooser(m model) string {
-	rows := []string{
-		titleStyle.Render("Which mysteries will you contemplate?"),
-		"",
-	}
-
+	var choices []string
 	for i, set := range Sets() {
 		line := "   " + set.Name
 		if i == m.choice {
 			// The marker is a character, not just a colour, so the selection is
 			// visible with colour stripped.
-			line = " ▸ " + set.Name
-			rows = append(rows, mysteryStyle.Render(line))
+			choices = append(choices, mysteryStyle.Render(" ▸ "+set.Name))
 			continue
 		}
-		rows = append(rows, dimStyle.Render(line))
+		choices = append(choices, dimStyle.Render(line))
 	}
+	// When the highlighted set is traditionally prayed. Only the one being looked
+	// at, not all four: it is a note about the choice in front of you rather than a
+	// table to study, and it changes as the highlight moves.
+	//
+	// Centred under the list while the list stays left-aligned, so it reads as a
+	// caption rather than as a fifth entry you could select.
+	days := lipgloss.NewStyle().
+		Width(lipgloss.Width(lipgloss.JoinVertical(lipgloss.Left, choices...))).
+		Align(lipgloss.Center).
+		Render(daysStyle.Render(Sets()[m.choice].Days))
 
-	rows = append(rows, "", dimStyle.Render("space to begin   x to finish"))
-	return boxStyle.Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
+	choices = append(choices, "", days, "", dimStyle.Render("space to begin   x to finish"))
+	body := lipgloss.JoinVertical(lipgloss.Left, choices...)
+
+	head := chooserHeading()
+
+	w := max(lipgloss.Width(body), lipgloss.Width(head))
+	centred := lipgloss.NewStyle().Width(w).Align(lipgloss.Center)
+
+	return boxStyle.Render(lipgloss.JoinVertical(lipgloss.Left,
+		centred.Render(head),
+		"",
+		lipgloss.NewStyle().Width(w).Render(body),
+	))
 }
+
+// chooserHeading is the crucifix over the rosary's full name.
+//
+// The cross is the SAME crossArt the rosary draws (see cross.go), not a copy: the
+// opening screen then cannot drift away from the object it introduces, and
+// restyling the crucifix restyles this too.
+//
+// "The Most Holy Rosary / of the Blessed Virgin Mary" is the devotion's proper
+// name, both lines in the beads' blue — Our Lady's colour. The second line is
+// unbolded so it reads as a subtitle rather than a second title, which is the only
+// hierarchy a terminal really affords here.
+func chooserHeading() string {
+	rows := make([]string, 0, len(crossArt)+4)
+	for _, line := range crossArt {
+		rows = append(rows, crossBead.Render(line))
+	}
+	rows = append(rows,
+		"",
+		rosaryTitleStyle.Render(rosaryTitle),
+		subtitleStyle.Render(rosarySubtitle),
+	)
+	return lipgloss.JoinVertical(lipgloss.Center, rows...)
+}
+
+// The devotion's proper name, shown on the opening screen.
+const (
+	rosaryTitle    = "The Most Holy Rosary"
+	rosarySubtitle = "of the Blessed Virgin Mary"
+)
 
 // hint is the one line of chrome: the keys, and nothing else. It is drawn in a
 // corner of the screen, not inside the rosary — see withHint.
@@ -458,6 +558,18 @@ var (
 
 	// The set's name is secondary to the mystery itself, so it is quieter.
 	setNameStyle = lipgloss.NewStyle().Foreground(gold).Faint(true)
+
+	// The opening screen's title, in the beads' blue and bold. Blue rather than the
+	// gold used for every other title: it is Our Lady's name, and her colour.
+	rosaryTitleStyle = lipgloss.NewStyle().Foreground(beadBlue).Bold(true)
+
+	// The second title line, in the same blue but unbolded — a subtitle, not a
+	// second title.
+	subtitleStyle = lipgloss.NewStyle().Foreground(beadBlue)
+
+	// When a set is traditionally prayed. Faint: it is guidance, and should be
+	// available to the eye without asking for it — the choice is still the user's.
+	daysStyle = lipgloss.NewStyle().Foreground(beadBlue).Faint(true)
 
 	mysteryStyle = lipgloss.NewStyle().Foreground(currentRest).Bold(true)
 

@@ -155,8 +155,10 @@ func TestChooserRunsFirstAndSpaceBegins(t *testing.T) {
 	if got.phase != atPrayer {
 		t.Error("space did not leave the chooser for the rosary")
 	}
-	if got.set.Name != Sorrowful.Name {
-		t.Errorf("began with %q, want %q", got.set.Name, Sorrowful.Name)
+	// The set the chooser was HIGHLIGHTING, not the one newModel was handed: the
+	// argument is a default to carry until a choice is made, and space makes it.
+	if want := Sets()[0].Name; got.set.Name != want {
+		t.Errorf("began with %q, want the highlighted set %q", got.set.Name, want)
 	}
 	if got.cursor != 0 || got.say != 0 {
 		t.Errorf("began at bead %d prayer %d, want the very start", got.cursor, got.say)

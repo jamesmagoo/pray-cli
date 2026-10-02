@@ -256,6 +256,7 @@ func eastAsianWidthClass(glyph string) string {
 	switch c := r[0]; {
 	// Geometric Shapes and the dingbats/symbols that are class A (ambiguous).
 	case c == 0x00B7, // ·  MIDDLE DOT
+		c == 0x2605, c == 0x2606, // ★ ☆ — the only class-A stars
 		c == 0x25C6, c == 0x25C7, // ◆ ◇
 		c == 0x25CB,                // ○
 		c >= 0x25CE && c <= 0x25D1, // ◎ ● ◐ ◑
