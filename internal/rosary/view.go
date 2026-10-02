@@ -1,0 +1,335 @@
+package rosary
+
+import (
+	"strings"
+
+	"charm.land/lipgloss/v2"
+)
+
+// The colours of RENDERING.md, kept here while the rosary is the only thing
+// using them. When internal/render lands they move to render/theme.go and this
+// file imports them instead, so there is one definition of gold.
+//
+// Only gold is used so far: the ring is gold and the prayer keeps the terminal's
+// own colour, which is RENDERING.md's restraint principle. Purple is reserved
+// there for the intention line and arrives with it.
+var gold = lipgloss.Color("#C9A227")
+
+// currentRest is the colour the bead under the cursor sits at between moves:
+// brighter than the ring so the eye finds it at a glance.
+var currentRest = lipgloss.Lighten(gold, 0.35)
+
+// render turns the model into the text on screen.
+//
+// It is deliberately a plain function of the model rather than a method: it
+// takes state and returns a string, so a test can call it with any model and
+// compare the result without starting a program.
+func render(m model) string {
+	if m.choosing {
+		return place(m, chooser(m))
+	}
+
+	// INSIDE the ring: the mystery, in its bordered box.
+	//
+	// The box is drawn as plain text on the grid (borders included) and styled
+	// afterwards, because the grid has to count cells and an escape sequence is not
+	// one cell wide. styleGrid colours these rows by position — see mysteryRows.
+	inside := mysteryLines(m.set, m.announced())
+
+	rosary := drawRosary(m.ring, m.beads, m.cursor, m.glow, m.fade, inside)
+
+	// BESIDE the ring, to its right: the prayer. Joined horizontally and centred
+	// vertically, so the prayer's middle lines up with the ring's middle while the
+	// ring itself keeps its own geometry.
+	//
+	// To move the prayer elsewhere, change this one JoinHorizontal — the ring does
+	// not know the prayer exists.
+	block := lipgloss.JoinHorizontal(lipgloss.Center, rosary, gutterCols, prayerPanel(m))
+
+	return place(m, block)
+}
+
+// gutterCols is the space between the ring and the prayer beside it.
+const gutterCols = "    "
+
+// prayerPanel is the prayer as it appears to the right of the rosary: the bead's
+// name, then the words.
+//
+// Unlike the mystery inside the ring, this is styled here rather than on the grid,
+// because it never touches the grid — it is joined to the finished ring as a
+// block, so escapes in it cannot disturb any cell arithmetic.
+func prayerPanel(m model) string {
+	w := m.words()
+
+	rows := []string{
+		titleStyle.Render(m.bead().Label()),
+		"",
+	}
+	// The prayer's own line breaks, never reflowed.
+	for _, l := range w.Lines {
+		rows = append(rows, prayerStyle(m.fade).Render(l))
+	}
+
+	// A FIXED width, not the width of this prayer.
+	//
+	// Sizing the panel to its contents makes the whole screen jump: the joined
+	// block gets narrower for a short prayer, and Place re-centres it, so the
+	// rosary slides sideways every time you move to a different prayer. Measured
+	// before this fix: the panel swung between 26 and 44 columns and the ring
+	// moved 9 columns left and right.
+	//
+	// Reserving the width of the longest prayer in the whole rosary means the
+	// block is the same size on every frame, so nothing moves. Short prayers
+	// simply leave empty space on the right.
+	return lipgloss.NewStyle().
+		Width(m.panelW).
+		MaxWidth(m.panelW).
+		Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
+}
+
+// prayerStyle is the prayer's colour at this point in its fade-in. Past the fade
+// it is unstyled, so the text sits in the terminal's own foreground colour.
+func prayerStyle(fade int) lipgloss.Style {
+	if fade > 1 {
+		return fadeStyle(fade)
+	}
+	return lipgloss.NewStyle()
+}
+
+// mysteryLines is the mystery as plain text for the middle of the ring: the set's
+// name, then the mystery itself.
+//
+// Plain, not styled, because it is written onto the grid cell by cell — see
+// drawRosary. Returns nothing before the first mystery is announced, so the ring
+// is simply empty for the pendant prayers.
+func mysteryLines(set MysterySet, announced int) []string {
+	name, ok := set.Mystery(announced)
+	if !ok {
+		return nil
+	}
+
+	// No border. A box inside the ring meant the ring had to be large enough to
+	// clear it, and the beads ended up sitting on the border — two frames
+	// competing for the same space. The ring IS the frame; the mystery just sits
+	// inside it, styled.
+	//
+	// Plain text, because these rows are written onto the grid cell by cell and an
+	// escape sequence is not one cell wide. Colour is added in styleGrid.
+	return []string{set.Name, "", name}
+}
+
+// place centres a block in the window, or returns it unplaced before the first
+// WindowSizeMsg arrives — centring inside a 0x0 box would collapse it.
+func place(m model, block string) string {
+	if m.width == 0 || m.height == 0 {
+		return block
+	}
+	centred := lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, block)
+	return withHint(m, centred)
+}
+
+// withHint writes the key hint into the bottom-left corner of a full screen.
+//
+// It is drawn ONTO the finished screen rather than joined to the rosary, which is
+// the point: chrome should not take part in the layout. Inside the ring it was
+// competing with the prayer for attention and padding out the ring's height; in a
+// corner it is available without being read.
+func withHint(m model, screen string) string {
+	rows := strings.Split(screen, "\n")
+	if len(rows) < 2 {
+		return screen
+	}
+
+	// The key names are brighter than what they do, so the eye picks out "space"
+	// and "q" at a glance without the line as a whole competing with the prayer.
+	text := keyStyle.Render("space") + hintStyle.Render(" next    ") +
+		keyStyle.Render("←") + hintStyle.Render(" back    ") +
+		keyStyle.Render("q") + hintStyle.Render(" quit")
+
+	// Second row from the bottom, two columns in: clear of the very edge, where
+	// terminals sometimes put scrollbars or shells put a prompt.
+	y := len(rows) - 2
+	rows[y] = overlay(rows[y], text, 2)
+	return strings.Join(rows, "\n")
+}
+
+// overlay writes s onto row at display column x, keeping the row's width.
+//
+// It walks the row counting DISPLAY columns rather than bytes, so escape sequences
+// already in the row (a bead's colour, say) do not shift the position. This is the
+// same reason the grid holds plain runes: once escapes are in a string, byte
+// offsets and columns are different things.
+func overlay(row, s string, x int) string {
+	w := lipgloss.Width(s)
+
+	var b strings.Builder
+	col := 0
+	inEsc := false
+	for _, r := range row {
+		switch {
+		case r == 0x1b:
+			inEsc = true
+			b.WriteRune(r)
+			continue
+		case inEsc:
+			b.WriteRune(r)
+			if r == 'm' {
+				inEsc = false
+			}
+			continue
+		}
+
+		if col == x {
+			b.WriteString(s)
+		}
+		// Skip the cells the overlay covers, so the row keeps its width.
+		if col < x || col >= x+w {
+			b.WriteRune(r)
+		}
+		col++
+	}
+	return b.String()
+}
+
+// chooser is the first screen: pick the mysteries to contemplate.
+func chooser(m model) string {
+	rows := []string{
+		titleStyle.Render("Which mysteries will you contemplate?"),
+		"",
+	}
+
+	for i, set := range Sets() {
+		line := "   " + set.Name
+		if i == m.choice {
+			// The marker is a character, not just a colour, so the selection is
+			// visible with colour stripped.
+			line = " ▸ " + set.Name
+			rows = append(rows, mysteryStyle.Render(line))
+			continue
+		}
+		rows = append(rows, dimStyle.Render(line))
+	}
+
+	rows = append(rows, "", dimStyle.Render("space to begin   q to quit"))
+	return boxStyle.Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
+}
+
+// frameLines is what goes inside the ring: the heading, the prayer, and a status
+// line, as plain text.
+//
+// One function builds every frame, and the ring is sized by running this over the
+// whole rosary (see fixedRing). That is deliberate: if sizing and drawing used
+// different code, the ring could be measured against text that is not what gets
+// drawn, and a bead would land on a letter.
+//
+// Line breaks are the prayer's own. RENDERING.md calls them sacred and nothing
+// here reflows or shortens them.
+func frameLines(b Bead, w Words, status string) []string {
+	var lines []string
+
+	heading := b.Label()
+	// When a bead says several prayers, name the one being said now as well as
+	// the bead, e.g. "Glory Be" on a bead labelled "Glory Be" needs no repeat,
+	// but the Fatima Prayer on that same bead does.
+	if w.Title != "" && w.Title != b.Name {
+		heading += " · " + w.Title
+	}
+	lines = append(lines, heading, "")
+	lines = append(lines, w.Lines...)
+
+	if status != "" {
+		lines = append(lines, "", status)
+	}
+	return lines
+}
+
+// hint is the one line of chrome: the keys, and nothing else. It is drawn in a
+// corner of the screen, not inside the rosary — see withHint.
+//
+// No counts. "Hail Mary 3 of 10" and "bead 11 of 68" turn praying into
+// progress-watching: the eye goes to the number instead of the words, and the
+// rosary becomes a task with a completion bar. The beads already show where you
+// are, which is the right place for it — in the object, not in text.
+func hint() string {
+	return "space next   ← back   q quit"
+}
+
+// Bead colours. The ring is gold; the bead being prayed is reversed so it reads
+// as "you are here" even with colour off (NO_COLOR), which a foreground change
+// alone would not survive.
+var (
+	beadDim   = lipgloss.NewStyle().Foreground(gold).Faint(true)
+	beadLarge = lipgloss.NewStyle().Foreground(gold)
+	// The resting current bead: bright and bold, but no Reverse — see glowStyle.
+	// currentRest is named separately because glowRamp must END on exactly this
+	// colour: if the flare faded to anything else, the bead would visibly jump
+	// when the animation stopped.
+	beadCurrent = lipgloss.NewStyle().Foreground(currentRest).Bold(true)
+	crossBead   = lipgloss.NewStyle().Foreground(gold).Bold(true)
+)
+
+// beadStyle picks the style for a bead: current beats kind, since knowing where
+// you are matters more than what sort of bead it is.
+//
+// The current bead's colour depends on glow, so it is the one style that is built
+// per frame rather than once at startup. That is the whole cost of the animation.
+func beadStyle(k Kind, current bool, glow int) lipgloss.Style {
+	switch {
+	case current && glow > 0:
+		return glowStyle(glow)
+	case current:
+		return beadCurrent
+	case k == Cross:
+		return crossBead
+	case k == Large:
+		return beadLarge
+	default:
+		return beadDim
+	}
+}
+
+// Styles for the mystery box and the chooser.
+var (
+	boxStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(gold).
+			Padding(0, 3)
+
+	// The set's name is secondary to the mystery itself, so it is quieter.
+	setNameStyle = lipgloss.NewStyle().Foreground(gold).Faint(true)
+
+	mysteryStyle = lipgloss.NewStyle().Foreground(currentRest).Bold(true)
+
+	titleStyle = lipgloss.NewStyle().Foreground(gold).Bold(true)
+
+	dimStyle = lipgloss.NewStyle().Faint(true)
+
+	// Quiet, but legible: the keys should be readable without hunting for them,
+	// while still sitting below the prayer and the beads in the visual order.
+	hintStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#8A8578"))
+
+	// The key names themselves: gold, so they read as the interactive part.
+	keyStyle = lipgloss.NewStyle().Foreground(gold).Faint(true)
+)
+
+// widestPrayer is the width to reserve for the prayer panel: the widest line of
+// any prayer in the rosary, and of any bead's name.
+//
+// Measured over the whole sequence once, so the panel never changes size and the
+// layout never shifts. See prayerPanel.
+func widestPrayer(beads []Bead) int {
+	w := 0
+	for _, b := range beads {
+		if x := lipgloss.Width(b.Label()); x > w {
+			w = x
+		}
+		for _, says := range b.Says {
+			for _, l := range says.Lines {
+				if x := lipgloss.Width(l); x > w {
+					w = x
+				}
+			}
+		}
+	}
+	return w
+}
