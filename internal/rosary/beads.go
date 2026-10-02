@@ -27,20 +27,34 @@ const (
 
 // ── THE TWO BEAD GLYPHS — change these to restyle the rosary ────────────────
 //
-// There are exactly two bead sizes, one slightly bigger than the other. Both
-// MUST be one cell wide or the ring shears (ROSARY-TUI.md §2); every pair below
-// has been measured at 1 cell.
+// There are exactly two bead sizes, one slightly bigger than the other.
 //
-// Candidates, big / small:
+// Both must be one cell wide or the ring shears (ROSARY-TUI.md §2) — but
+// lipgloss.Width is NOT enough to establish that. It reports the width Unicode
+// declares, and a font may paint a glyph wider than its cell regardless. When it
+// does, the glyph overflows to the RIGHT of its cell, so the bead looks shifted
+// right of where the grid put it.
 //
-//	"◯" "○"   large / medium hollow   — the default: big, and the two sizes read
-//	"⬤" "●"   heavy / medium filled   — biggest and solid, but the two look alike
-//	"●" "○"   filled / hollow         — strong contrast, though of fill not size
-//	"●" "•"   filled / bullet
-//	"○" "◦"   medium / small hollow   — most delicate
+// The reliable test is the East Asian Width property: both glyphs must be in the
+// SAME class. Mixing them is what bit here — "⬤" (U+2B24) is class N while "●"
+// (U+25CF) is class A, and the big bead sat visibly half a cell right of the
+// pendant's column while every small bead was true. It is in the name: BLACK
+// LARGE CIRCLE is meant to be oversized.
+//
+// TestBeadGlyphsShareAWidthClass enforces this; see it before changing these.
+//
+// Candidates, big / small (all same-class pairs):
+//
+//	"●" "○"   filled / hollow         — the default: strongest contrast
+//	"◆" "◇"   filled / hollow diamond
+//	"⭘" "○"   heavy ring / hollow     — more delicate
+//	"●" "·"   filled / middle dot     — smalls recede to a thread
+//
+// Avoid "⬤", "◉", "◍" and "⬢": all class N, and they pair badly with the class-A
+// circles above.
 var (
-	bigBead   = "⬤"
-	smallBead = "●"
+	bigBead   = "●"
+	smallBead = "○"
 )
 
 // Glyph is the character drawn for a bead of this kind.

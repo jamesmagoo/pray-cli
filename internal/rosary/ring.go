@@ -65,16 +65,27 @@ func (c *canvas) text(x, y int, s string) {
 	}
 }
 
-// The ring is an arc with a gap at the bottom, where the pendant hangs on a real
-// rosary. Angles are measured the usual way, counter-clockwise from east, with y
-// flipped because rows grow downwards.
+// The ring is a CLOSED circle. Angles are measured the usual way,
+// counter-clockwise from east, with y flipped because rows grow downwards.
 //
-// gapArc is negative so the sequence runs counter-clockwise: the first bead sits
-// just left of the pendant and the beads travel away from the crucifix, up the
-// left side, round, and back down — the direction the fingers go.
+// ringStart is straight down, where the pendant hangs: the loop begins and ends
+// at the bottom big bead, and the pendant descends vertically from it.
+//
+// ringArc is negative so the sequence runs counter-clockwise — the beads travel
+// away from the crucifix, up the left side, round, and back down, the direction
+// the fingers go.
+//
+// It used to be an open arc with a 51.6 degree gap at the bottom, on the theory
+// that a rosary's loop has a mouth where the pendant joins it. That was the thing
+// stopping the five big beads from forming a pentagon: 55 beads spread over a
+// partial arc give 62.8 degrees between every eleventh one, and no amount of even
+// spacing fixes it. A CLOSED loop of 55 divides by five exactly, so the pentagon
+// falls out at 72.00 degrees with nothing arranging it. The pendant hangs from the
+// bottom bead rather than through a hole beside it, which is also how a real
+// rosary is strung.
 const (
-	gapStart = -math.Pi/2 - 0.45 // just right of straight down, measured CCW
-	gapArc   = -(2*math.Pi - 0.9)
+	ringStart = -math.Pi / 2 // straight down: the bottom of the loop
+	ringArc   = -2 * math.Pi // a full turn, counter-clockwise
 )
 
 // pendantRows is how many rows the pendant occupies: one per bead plus its gaps.
@@ -140,6 +151,20 @@ func fixedRing(beads []Bead) ringGeometry {
 // this runs a few dozen iterations on a ring of a dozen beads.
 func layout(beads []Bead, textW, textH int) ringGeometry {
 	n := len(beads)
+
+	// How many positions the ring actually has to hold.
+	//
+	// NOT len(beads) minus the pendant: a bead with SameAs is drawn on top of
+	// another and takes no place of its own. Counting it made the sizing checks
+	// test a ring one bead denser than the one being drawn, so the ring was grown
+	// to clear a crowding that never happened — and the extra size pushed the five
+	// big beads off their even spacing.
+	onRingSlots := 0
+	for i := pendantLen; i < n; i++ {
+		if beads[i].SameAs == 0 {
+			onRingSlots++
+		}
+	}
 	// Grow the ring until no bead sits on a letter.
 	//
 	// Both radii have to be free to grow, not just rx. With many beads the ring is
@@ -158,7 +183,7 @@ func layout(beads []Bead, textW, textH int) ringGeometry {
 	ry := textH/2 + 2
 	for ; ry < 200; ry++ {
 		rx := ry * 2
-		if clears(rx, ry, n, textW, textH) && spacedOut(n, rx, ry) {
+		if clears(rx, ry, n, textW, textH) && spacedOut(onRingSlots, rx, ry) {
 			break
 		}
 	}
@@ -197,21 +222,12 @@ func layout(beads []Bead, textW, textH int) ringGeometry {
 		return g
 	}
 
-	// The FIRST bead of the ring sits directly above the pendant, at the bottom of
-	// the circle — it is where the loop begins and ends, so it belongs at the
-	// join, not wherever even spacing happens to put it.
-	//
-	// It is pinned here explicitly, and the remaining beads are then spaced around
-	// the arc above it. Spacing all of them together would walk the first bead off
-	// to one side of the pendant.
-	g.pos[pendantLen] = [2]int{g.cx, g.cy + g.ry}
-
 	// Beads that share another bead's place take no slot of their own: a second
 	// visit to a bead is drawn as that same bead. They are filled in last, once
 	// every real position is known.
 	var shared []int
 	var own []int
-	for i := pendantLen + 1; i < n; i++ {
+	for i := pendantLen; i < n; i++ {
 		if beads[i].SameAs > 0 {
 			shared = append(shared, i)
 			continue
@@ -219,21 +235,21 @@ func layout(beads []Bead, textW, textH int) ringGeometry {
 		own = append(own, i)
 	}
 
-	// The decades: spaced evenly by arc length all the way round, starting just
-	// past the pinned bead and coming back to just before it.
+	// Every ring bead, spaced evenly around the closed loop in ONE run.
 	//
-	// One extra slot is asked for and its last entry dropped, so no bead lands on
-	// top of the pinned one — the run's two ends are the same point on a closed
-	// circle.
-	if len(own) > 0 {
-		for i, a := range arcAngles(len(own)+1, rx, ry) {
-			if i == len(own) {
-				break
-			}
-			g.pos[own[i]] = [2]int{
-				g.cx + int(math.Round(float64(rx)*math.Cos(a))),
-				g.cy - int(math.Round(float64(ry)*math.Sin(a))),
-			}
+	// The first of them lands at ringStart — straight down, directly above the
+	// pendant — because that is where the walk begins, so the bead the loop opens
+	// and closes on sits at the join without being placed by hand.
+	//
+	// It used to be pinned there explicitly, with the rest spaced over the arc
+	// above it and one extra slot requested and dropped to stop the run's two ends
+	// colliding. All of that was scaffolding for the open arc. A closed loop needs
+	// none of it: ask for exactly as many slots as there are beads and they come
+	// back evenly spaced with the first at the bottom.
+	for i, a := range arcAngles(len(own), rx, ry) {
+		g.pos[own[i]] = [2]int{
+			g.cx + int(math.Round(float64(rx)*math.Cos(a))),
+			g.cy - int(math.Round(float64(ry)*math.Sin(a))),
 		}
 	}
 
@@ -243,41 +259,78 @@ func layout(beads []Bead, textW, textH int) ringGeometry {
 	return g
 }
 
-// arcAngles returns the angle for each of n beads, spaced evenly by DISTANCE
-// along the ellipse rather than by angle.
+// cellAspect is how many columns tall one terminal row is: a cell is about twice
+// as tall as it is wide.
 //
-// This is what stops the beads clumping. The ellipse has no closed form for arc
-// length, so walk it in fine steps, add up the distance travelled, then place
-// beads at equal fractions of the total. A thousand steps is far more than the
-// ~70 beads need and still trivial to compute once at startup.
+// It is the conversion between the grid's coordinates and what the eye actually
+// sees. One step down the screen covers twice the visual distance of one step
+// across, so any measurement of "how far apart do these look?" has to scale the
+// vertical by this before it means anything.
+//
+// The same 2:1 is why rx = 2*ry draws a circle rather than a hoop (see layout);
+// this constant names it for the one other place that needs it.
+const cellAspect = 2.0
+
+// arcAngles returns the angle for each of n beads, spaced evenly by VISUAL
+// distance around the ellipse.
+//
+// Visual, not geometric, and that distinction is the whole point of this function.
+// Walking the ellipse by its own arc length clumps the beads at the top and bottom
+// and stretches them down the sides, because the ellipse is flat where it crosses
+// the vertical axis and steep where it crosses the horizontal: equal arc length
+// buys you very different numbers of CELLS depending on where you spend it.
+// Measured on the real rosary, that gave a worst-to-best gap ratio of 1.98 — beads
+// twice as far apart in some places as others, which is exactly what it looked
+// like. Scaling dy by cellAspect while walking brings the ratio to 1.01.
+//
+// A consequence, not a coincidence: with 55 ring beads in five decades of eleven,
+// evenly spaced slots around a CLOSED loop put every eleventh bead — the big ones
+// — at exactly 72 degrees from the last. The five big beads form a true pentagon
+// with no code to arrange them; they are simply every 11th of 55 evenly spaced
+// points on a circle. This only works because the loop is closed: see ringArc.
+//
+// The ellipse has no closed form for arc length, so walk it in fine steps, add up
+// the distance travelled, then place beads at equal fractions of the total. Two
+// thousand steps is far more than the ~55 beads need and still trivial to compute
+// once at startup.
 func arcAngles(n, rx, ry int) []float64 {
 	if n <= 1 {
-		return []float64{gapStart}
+		return []float64{ringStart}
 	}
 
-	const steps = 2000
-	// Walk the arc, recording the cumulative distance at each step.
+	// 20000 steps, not 2000: the walk quantises every angle to a step boundary, and
+	// at 2000 that was enough to shift a big bead 0.18 degrees off the pentagon.
+	// Cheap insurance — this runs once, at startup.
+	const steps = 20000
+	// Walk the circle, recording the cumulative VISUAL distance at each step.
 	dist := make([]float64, steps+1)
-	px := float64(rx) * math.Cos(gapStart)
-	py := float64(ry) * math.Sin(gapStart)
+	px := float64(rx) * math.Cos(ringStart)
+	py := float64(ry) * math.Sin(ringStart)
 	for k := 1; k <= steps; k++ {
-		a := gapStart + gapArc*float64(k)/float64(steps)
+		a := ringStart + ringArc*float64(k)/float64(steps)
 		x := float64(rx) * math.Cos(a)
 		y := float64(ry) * math.Sin(a)
-		dist[k] = dist[k-1] + math.Hypot(x-px, y-py)
+		// dy scaled to columns: this one multiplication is the fix. Without it the
+		// walk measures grid units, which is not what the eye is looking at.
+		dist[k] = dist[k-1] + math.Hypot(x-px, (y-py)*cellAspect)
 		px, py = x, y
 	}
 	total := dist[steps]
 
 	// For each bead, find where along that walk it falls.
+	//
+	// Divided by n, not n-1: the loop is CLOSED, so the last bead must stop one
+	// interval short of the first rather than landing on top of it. n-1 is right
+	// for an open arc with two distinct ends, and was right when this was one —
+	// using it on a closed loop puts a bead at 360 degrees, i.e. back at the start.
 	angles := make([]float64, n)
 	k := 0
 	for i := 0; i < n; i++ {
-		want := total * float64(i) / float64(n-1)
+		want := total * float64(i) / float64(n)
 		for k < steps && dist[k+1] < want {
 			k++
 		}
-		angles[i] = gapStart + gapArc*float64(k)/float64(steps)
+		angles[i] = ringStart + ringArc*float64(k)/float64(steps)
 	}
 	return angles
 }
@@ -289,8 +342,9 @@ func arcAngles(n, rx, ry int) []float64 {
 // two beads. Requiring a gap makes the ring grow until the perimeter is actually
 // long enough for the beads on it, which is the honest constraint: you cannot fit
 // 68 distinct beads on a ring of 60 cells.
+// n is how many beads sit ON THE RING — the pendant excluded, and beads that
+// share another's place excluded too, since they take no position of their own.
 func spacedOut(n, rx, ry int) bool {
-	n -= pendantLen
 	if n < 2 {
 		return true
 	}

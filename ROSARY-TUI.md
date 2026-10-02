@@ -46,7 +46,7 @@ It is a recipe per question, with the constraints that will bite you.
 | Mysteries | `mysteries.go` | the set, and `Announcing(n, …)` for where |
 | Ring roundness | `ring.go` | `rx := ry * 2` |
 | Ring tightness | `ring.go` | `const gutter = 3` |
-| Gap / direction | `ring.go` | `gapStart`, `gapArc` |
+| Start / direction | `ring.go` | `ringStart`, `ringArc` |
 | Step indicator | `animate.go` | `glowFrames`, `bloom`, `glowRamp` |
 | Fade-in speed | `animate.go` | `fadeFrames`, `frameRate` |
 | Fade-out on exit | `animate.go` | `departFrames`, `departRamp` |
@@ -424,9 +424,9 @@ shape is mirrored vertically.
 clockwise; a positive one, counter-clockwise.
 
 In this package the beads must run away from the crucifix (the direction fingers
-travel), which is counter-clockwise from just left of the pendant — hence
-`gapStart = -π/2 - 0.45` and a negative `gapArc`. Getting the sign wrong was
-one of the real bugs in this build: the decade ran backwards.
+travel), which is counter-clockwise from the bottom of the loop — hence
+`ringStart = -π/2` (straight down) and a negative `ringArc`. Getting the sign
+wrong was one of the real bugs in this build: the decade ran backwards.
 
 **3. Round, don't truncate.** `int(x)` truncates toward zero, which biases
 every position and visibly distorts the shape. `int(math.Round(x))` is correct.
@@ -1025,22 +1025,60 @@ row. Growing in both directions lets it escape whichever way it is stuck.
 
 ### Spacing by distance, not by angle
 
-The first version placed beads at equal **angles**. On a circle that is also equal
-distance; on an ellipse it is not. Equal angles cover much less ground where the
-curve is tight, so the beads clumped at the narrow ends and spread out along the
-flat sides.
+This took **three** goes, and each fixed a different mistake.
 
-`arcAngles` fixes this by walking the ellipse in 2,000 fine steps, accumulating
-the real distance travelled, then placing beads at equal fractions of the total:
+**First version: equal angles.** On a circle that is also equal distance; on an
+ellipse it is not. Equal angles cover much less ground where the curve is tight,
+so beads clumped at the narrow ends.
+
+**Second version: equal arc length.** Better, but still visibly clumped — `●●●
+●●●` across the top and bottom, a thin string down each side. The reason is the
+cell aspect ratio. A cell is twice as tall as it is wide, so a step of vertical
+travel costs **twice** the visual distance of a step across. The ellipse is flat
+where it crosses the vertical axis and steep where it crosses the horizontal, so
+equal arc length buys very different numbers of CELLS depending on where you spend
+it. Measured: worst-to-best gap ratio **1.98**.
+
+**Third version: equal VISUAL distance.** One multiplication:
 
 ```go
-dist[k] = dist[k-1] + math.Hypot(x-px, y-py)   // actual distance, step by step
-...
-want := total * float64(i) / float64(n-1)      // bead i goes here
+dist[k] = dist[k-1] + math.Hypot(x-px, (y-py)*cellAspect)
 ```
 
+Ratio **1.01**. The lesson generalises: when you measure distance on a terminal
+grid, you are measuring in a space that is stretched 2:1, and any metric that
+ignores that is measuring the wrong thing.
+
+```go
+want := total * float64(i) / float64(n)   // bead i goes here
+```
+
+Divided by `n`, not `n-1`: the loop is **closed**, so the last bead must stop one
+interval short of the first rather than landing on top of it. `n-1` is right for an
+open arc with two distinct ends, and was right while this was one.
+
 The ellipse has no closed form for arc length, which is why this is a numeric
-walk rather than a formula. It runs once at startup.
+walk rather than a formula. It runs once at startup, at 20,000 steps — the walk
+quantises every angle to a step boundary, and 2,000 was enough to shift a big bead
+0.18° off true.
+
+### The pentagon is a consequence, not a construction
+
+The five big beads sit at exactly **72.00°** from each other. Nothing arranges
+them.
+
+Each decade is eleven beads, and there are 55 on the ring, so evenly spacing 55
+slots around a **closed** loop puts every eleventh one at a fifth of the circle.
+
+That word *closed* is load-bearing, and it was the whole reason the pentagon did
+not appear sooner. The ring used to be an open arc with a 51.6° gap at the bottom,
+on the reasoning that a rosary's loop has a mouth where the pendant joins it. But
+55 beads spread over a partial arc give **62.8°** between every eleventh, and no
+amount of even spacing fixes that — 55 divides by 5 only over a full turn.
+
+Closing the loop and hanging the pendant from the bottom bead (rather than through
+a gap beside it) made the arithmetic exact, and deleted a pile of scaffolding with
+it — see below.
 
 **Why iterate rather than solve?** The closed forms here are long, easy to get
 subtly wrong, and hard to read six months later. A few hundred iterations of an
@@ -1137,20 +1175,26 @@ if i != cursor && g.pos[i] == g.pos[cursor] {
 }
 ```
 
-### The first ring bead is pinned, not spaced
+### The first ring bead places itself
 
-The bead where the loop begins and ends sits **directly above the pendant**, at
-the bottom of the circle:
+The bead where the loop begins and ends sits **directly above the pendant**, at the
+bottom of the circle — and it gets there on its own, because `ringStart` is
+straight down and the walk starts there:
 
 ```go
-g.pos[pendantLen] = [2]int{g.cx, g.cy + g.ry}   // pinned to the join
-// ...the rest are then spaced by arc length around the circle
+for i, a := range arcAngles(len(own), rx, ry) {   // one run, all of them
+	g.pos[own[i]] = ...
+}
 ```
 
-Spacing all the ring beads together walks that one off to one side of the
-pendant — the join stops looking like a join. So it is placed explicitly and the
-decades are distributed from there, asking `arcAngles` for one extra slot and
-dropping the last so nothing lands back on top of it.
+This used to be three things: the bottom bead pinned by hand, the rest spaced
+separately over the arc above it, and one extra slot requested and then dropped so
+the run's two ends would not collide. All of it was scaffolding for the open arc.
+A closed loop needs none of it — ask for exactly as many slots as there are beads
+and they come back evenly spaced with the first at the bottom.
+
+A good sign when a model is corrected: the special cases that propped up the old
+one stop being necessary.
 
 ### The pendant comes from the sequence
 
@@ -1739,7 +1783,7 @@ constraints that will bite you.
 ```go
 // beads.go — the two glyphs, and the cross
 var (
-    bigBead   = "⬤"   // the five that open the decades
+    bigBead   = "●"   // the five that open the decades
     smallBead = "●"   // Hail Marys, and the pendant's chain
 )
 
@@ -1759,20 +1803,51 @@ beads nothing constructed one, and it was removed.
 ### "Size" is really glyph weight
 
 A terminal cannot scale a character: every cell is the same size. So a "bigger"
-bead means a **heavier glyph**, and these are all one cell wide (measured):
+bead means a **heavier glyph**.
 
-| Lighter → heavier | Hollow | Filled |
-|---|---|---|
-| small | `◦` `∙` | `•` |
-| medium | `○` | `●` |
-| large | `◯` | `⬤` |
-
-So `Large: "⬤"` and `Small: "○"` gives much more contrast than `●`/`○`.
-
-> **The one hard rule:** every bead glyph must be **1 cell wide**. `⚪` and `⚫`
-> look like beads and are **2 cells** — each one shifts its row a column right
-> and shears the ring. Check before committing to a glyph:
+> **Rule 1: every bead glyph must be 1 cell wide.** `⚪` and `⚫` look like beads
+> and are **2 cells** — each one shifts its row a column right and shears the ring.
 > `lipgloss.Width("⚪")` → 2. See §2.
+
+> **Rule 2: both bead glyphs must share an East Asian Width CLASS.** This one is
+> subtler, and `lipgloss.Width` cannot catch it — read on.
+
+#### The trap: declared width is not painted width
+
+The pair `⬤` / `●` shipped for a while and looked wrong in a way that was hard to
+name: the big bead at the top of the pendant sat slightly **right** of the pendant's
+column — and snapped into place when selected.
+
+`lipgloss.Width` reports **1** for both. It reports the width Unicode *declares*;
+a font may paint a glyph wider than its cell anyway, and the overflow goes
+rightward from the cell's left edge. Measured off a screenshot: the big bead's
+centre was ~9px right of the pendant's, about half a cell.
+
+The property that predicts this is the **East Asian Width class** (UAX #11):
+
+| Glyph | Codepoint | Class | |
+|---|---|---|---|
+| `⬤` | U+2B24 | **N** | BLACK **LARGE** CIRCLE — the name says it |
+| `●` | U+25CF | **A** | |
+| `○` | U+25CB | **A** | |
+| `◉` `◍` `⬢` | | **N** | same problem |
+
+Mixing classes is what bit. And it explains the selected-bead behaviour exactly:
+the halo glyph `◎` that replaces the bead under the cursor is class **A**, so the
+bead appeared to jump into alignment the moment you landed on it.
+
+Same-class pairs, all safe:
+
+| | Big / small | Reads as |
+|---|---|---|
+| **default** | `●` `○` | filled vs hollow — strongest contrast |
+| | `◆` `◇` | diamonds |
+| | `⭘` `○` | two rings, more delicate |
+| | `●` `·` | smalls recede to a thread |
+
+`TestBeadGlyphsShareAWidthClass` enforces it. The crucifix is deliberately **not**
+checked — `✠` is class N, but it sits alone on its row with no bead beside it to
+disagree with, and requiring class A would rule out every cross glyph for no gain.
 
 ### The colours
 
@@ -1857,19 +1932,34 @@ for ; ry < 200; ry++ {
 | Tighter around the text | `const gutter = 3` → smaller. This is the blank cells kept between a bead and the text |
 | Hold more beads without touching | `spacedOut` — change `if p == prev` to require a gap (`max(|dx|,|dy|) < 2`). **This made the frame 81×48 instead of 41×28**, so expect it to grow a lot |
 
+**Resist making the ring bigger.** It is the obvious response to beads that touch,
+and it is wrong. Measured at the current 55 beads:
+
+| Size | Touching pairs | Blank rows in the chain |
+|---|---|---|
+| **18×9 (current)** | 4 | **0** |
+| 22×11 | 0 | 2 |
+| 26×13 | 0 | 5 |
+
+A larger ring spaces consecutive beads more than one row apart, so rows appear with
+no bead at all — the chain reads as **broken strands**, which is worse than two
+beads touching. `TestTheRingHasNoBreaks` enforces this.
+
 ### Shape
 
 ```go
-gapStart = -math.Pi/2 - 0.45   // where the first bead sits (radians)
-gapArc   = -(2*math.Pi - 0.9)  // how far round the beads run
+ringStart = -math.Pi / 2   // where the first bead sits: straight down
+ringArc   = -2 * math.Pi   // a full turn, counter-clockwise
 ```
 
-- **The gap at the bottom** (where the pendant hangs) is the `0.9`. Larger = wider
-  gap.
-- **Direction** is the sign of `gapArc`. Negative runs counter-clockwise — away
+- **Direction** is the sign of `ringArc`. Negative runs counter-clockwise — away
   from the crucifix, which is the direction the fingers travel. Flip the sign and
   the decade runs backwards.
-- **Starting position** is `gapStart`. `-π/2` is straight down.
+- **Starting position** is `ringStart`. `-π/2` is straight down, where the pendant
+  hangs.
+- **Do not reopen a gap** in `ringArc` without expecting to lose the pentagon.
+  `TestTheBigBeadsFormAPentagon` will tell you: the five big beads only land 72°
+  apart because 55 slots divide evenly over a *full* turn.
 
 ### If you change the geometry, check two things
 
@@ -1969,15 +2059,21 @@ Shrinking it means a smaller ring, which `rx = ry * 2` ties to the width.
 
 The fifth decade's Glory Be/Fatima bead and the Hail Holy Queen are two separate
 beads, and they end up next to each other at the end of the ring — so there is one
-`⬤⬤` pair left. Unlike the decade junctions (which were a real modelling error,
+`●●` pair left. Unlike the decade junctions (which were a real modelling error,
 now fixed) these genuinely are two stops, so it is a question of how you want the
 close prayed, not a bug: merge them in `sequence.go` if a single bead is right.
 
-### 3. Beads still bunch slightly at top and bottom
+### 3. Four pairs of beads touch, from cell rounding alone
 
-`arcAngles` spaces by distance, which fixed the gross clumping, but the ellipse
-curves tightest at its ends and the rounding to integer cells still gathers beads
-there. Visible as `○ ○ ○  ○ ○ ○` rather than perfectly even spacing.
+The spacing itself is even — ratio 1.01 in continuous space, and the five big beads
+land at exactly 72°. What remains is the grid: ideal spacing is **2.06 cells**, and
+a bead can only sit on a whole one, so some neighbours round to 1 apart and show as
+`●●`.
+
+This is not fixable by better spacing maths, and **not** fixable by a bigger ring —
+see the table under "If you change the ring's size", where growing it trades these
+four touching pairs for blank rows in the chain, which looks worse. It would take
+either fewer beads or a finer grid than a terminal has.
 
 ### 4. `data/` has only three prayers
 
@@ -1985,11 +2081,6 @@ there. Visible as `○ ○ ○  ○ ○ ○` rather than perfectly even spacing.
 uses `Text(...)` with abbreviated words — the Creed and Hail Holy Queen are
 placeholders, not the full prayers. Swap each for `Say(...)` as it lands in
 `data/`.
-
-### 5. No decade/mystery concept
-
-There is no notion of which mystery is being meditated on, which is arguably the
-most important thing on screen when actually praying.
 
 ---
 
@@ -2002,6 +2093,13 @@ most important thing on screen when actually praying.
 3. Never put styled text in a grid cell — style after layout, never during.
 4. Cells are ~2:1 tall, so `rx ≈ 2 × ry` for a visual circle.
 5. Screen y grows downward: use `cy - ry*sin(a)`.
+6. Cells are ~2:1 tall for **distance**, too. Any "how far apart do these look?"
+   must scale dy — equal arc length on an ellipse is not equal visual spacing.
+7. `lipgloss.Width` is the width Unicode *declares*, not what the font paints. Two
+   glyphs that both report 1 can still render differently — check the East Asian
+   Width class and keep a set of glyphs in one class.
+8. Spacing `n` items around a **closed** loop divides by `n`, not `n-1`. The `n-1`
+   that is right for an open arc puts the last item on top of the first.
 6. `int(math.Round(x))`, never `int(x)`.
 7. A collision check must use the same coordinates and rounding as the drawing.
 8. Derive a shared value (like the centre) in exactly one place.
