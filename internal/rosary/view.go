@@ -61,8 +61,14 @@ const gutterCols = "    "
 func prayerPanel(m model) string {
 	w := m.words()
 
+	// The heading names the PRAYER being said, not the bead.
+	//
+	// A bead can carry several prayers — the junction bead holds the Glory Be, the
+	// Fatima Prayer and the next Our Father — so naming the bead showed "Our
+	// Father" above the words of the Glory Be. The bead is where you are; the
+	// prayer is what you are saying, and that is what the heading is for.
 	rows := []string{
-		titleStyle.Render(m.bead().Label()),
+		titleStyle.Render(w.Title),
 		"",
 	}
 	// The prayer's own line breaks, never reflowed.
@@ -141,10 +147,10 @@ func withHint(m model, screen string) string {
 	}
 
 	// The key names are brighter than what they do, so the eye picks out "space"
-	// and "q" at a glance without the line as a whole competing with the prayer.
+	// and "x" at a glance without the line as a whole competing with the prayer.
 	text := keyStyle.Render("space") + hintStyle.Render(" next    ") +
 		keyStyle.Render("←") + hintStyle.Render(" back    ") +
-		keyStyle.Render("q") + hintStyle.Render(" quit")
+		keyStyle.Render("x") + hintStyle.Render(" finish")
 
 	// Second row from the bottom, two columns in: clear of the very edge, where
 	// terminals sometimes put scrollbars or shells put a prompt.
@@ -210,37 +216,8 @@ func chooser(m model) string {
 		rows = append(rows, dimStyle.Render(line))
 	}
 
-	rows = append(rows, "", dimStyle.Render("space to begin   q to quit"))
+	rows = append(rows, "", dimStyle.Render("space to begin   x to finish"))
 	return boxStyle.Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
-}
-
-// frameLines is what goes inside the ring: the heading, the prayer, and a status
-// line, as plain text.
-//
-// One function builds every frame, and the ring is sized by running this over the
-// whole rosary (see fixedRing). That is deliberate: if sizing and drawing used
-// different code, the ring could be measured against text that is not what gets
-// drawn, and a bead would land on a letter.
-//
-// Line breaks are the prayer's own. RENDERING.md calls them sacred and nothing
-// here reflows or shortens them.
-func frameLines(b Bead, w Words, status string) []string {
-	var lines []string
-
-	heading := b.Label()
-	// When a bead says several prayers, name the one being said now as well as
-	// the bead, e.g. "Glory Be" on a bead labelled "Glory Be" needs no repeat,
-	// but the Fatima Prayer on that same bead does.
-	if w.Title != "" && w.Title != b.Name {
-		heading += " · " + w.Title
-	}
-	lines = append(lines, heading, "")
-	lines = append(lines, w.Lines...)
-
-	if status != "" {
-		lines = append(lines, "", status)
-	}
-	return lines
 }
 
 // hint is the one line of chrome: the keys, and nothing else. It is drawn in a
@@ -251,7 +228,7 @@ func frameLines(b Bead, w Words, status string) []string {
 // rosary becomes a task with a completion bar. The beads already show where you
 // are, which is the right place for it — in the object, not in text.
 func hint() string {
-	return "space next   ← back   q quit"
+	return "space next   ← back   x finish"
 }
 
 // Bead colours. The ring is gold; the bead being prayed is reversed so it reads
@@ -320,10 +297,15 @@ var (
 func widestPrayer(beads []Bead) int {
 	w := 0
 	for _, b := range beads {
-		if x := lipgloss.Width(b.Label()); x > w {
-			w = x
-		}
 		for _, says := range b.Says {
+			// The heading is the prayer's TITLE (see prayerPanel), not the bead's
+			// name, so that is what has to be measured. Measuring the bead's name
+			// would reserve the wrong width for any bead whose prayers are titled
+			// differently from it — a junction bead is named "Our Father" but shows
+			// "Glory Be" and "Fatima Prayer" too.
+			if x := lipgloss.Width(says.Title); x > w {
+				w = x
+			}
 			for _, l := range says.Lines {
 				if x := lipgloss.Width(l); x > w {
 					w = x

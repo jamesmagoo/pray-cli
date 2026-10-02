@@ -171,7 +171,7 @@ func TestCrossKeepsItsShapeWhenSelected(t *testing.T) {
 	}
 
 	m.cursor, m.say = 0, 0
-	out := drawRosary(m.ring, m.beads, 0, glowFrames, 0, frameLines(m.bead(), m.words(), hint()))
+	out := drawRosary(m.ring, m.beads, 0, glowFrames, 0, mysteryLines(m.set, m.announced()))
 
 	if !strings.Contains(out, Cross.Glyph()) {
 		t.Error("the crucifix disappeared while it was the current bead")

@@ -77,6 +77,17 @@ const (
 	gapArc   = -(2*math.Pi - 0.9)
 )
 
+// pendantRows is how many rows the pendant occupies: one per bead plus its gaps.
+func pendantRows() int {
+	rows := pendantLen
+	for i := 0; i < pendantLen; i++ {
+		if PendantGapAfter(i) {
+			rows++
+		}
+	}
+	return rows
+}
+
 // centre returns the ring's centre for the given radii. Both the sizing check
 // and the drawing go through this, so they cannot drift apart: two independent
 // derivations of the centre is how a bead silently lands on a letter.
@@ -118,7 +129,7 @@ func fixedRing(beads []Bead) ringGeometry {
 			}
 		}
 	}
-	return layout(len(beads), textW, textH)
+	return layout(beads, textW, textH)
 }
 
 // layout sizes a ring that holds n beads around a text block of the given size.
@@ -127,7 +138,8 @@ func fixedRing(beads []Bead) ringGeometry {
 // widen it one cell at a time until clears reports no bead overlaps the text.
 // Solving the ellipse algebraically would be exact but far harder to read, and
 // this runs a few dozen iterations on a ring of a dozen beads.
-func layout(n, textW, textH int) ringGeometry {
+func layout(beads []Bead, textW, textH int) ringGeometry {
+	n := len(beads)
 	// Grow the ring until no bead sits on a letter.
 	//
 	// Both radii have to be free to grow, not just rx. With many beads the ring is
@@ -155,7 +167,7 @@ func layout(n, textW, textH int) ringGeometry {
 	g := ringGeometry{
 		rx: rx, ry: ry,
 		w: rx*2 + 5,
-		h: ry*2 + 3 + pendantLen + 1,
+		h: ry*2 + 3 + pendantRows() + 1,
 	}
 	g.cx, g.cy = centre(rx, ry)
 	// The first pendantLen beads hang below the ring, in a line from the gap; the
@@ -165,20 +177,68 @@ func layout(n, textW, textH int) ringGeometry {
 	// is visibly ATTACHED. A one-row gap here makes the crucifix look like it is
 	// floating free of the rosary, which is wrong: on a real rosary the pendant
 	// hangs from the ring.
+	// Drawn bottom-up: the crucifix is furthest from the ring. Gaps are blank rows
+	// of chain between beads, so the pendant reads as
+	//
+	//	crucifix — bead — gap — three beads — gap — the ring
+	//
+	// rather than as one unbroken column of beads.
 	g.pos = make([][2]int, n)
+	row := g.cy + g.ry + pendantRows() - 1
 	for i := 0; i < pendantLen && i < n; i++ {
-		// Drawn bottom-up: the crucifix is furthest from the ring.
-		g.pos[i] = [2]int{g.cx, g.cy + g.ry + (pendantLen - 1 - i)}
+		g.pos[i] = [2]int{g.cx, row}
+		row--
+		if PendantGapAfter(i) {
+			row--
+		}
 	}
 	onRing := n - pendantLen
 	if onRing < 1 {
 		return g
 	}
-	for i, a := range arcAngles(onRing, rx, ry) {
-		g.pos[pendantLen+i] = [2]int{
-			g.cx + int(math.Round(float64(rx)*math.Cos(a))),
-			g.cy - int(math.Round(float64(ry)*math.Sin(a))),
+
+	// The FIRST bead of the ring sits directly above the pendant, at the bottom of
+	// the circle — it is where the loop begins and ends, so it belongs at the
+	// join, not wherever even spacing happens to put it.
+	//
+	// It is pinned here explicitly, and the remaining beads are then spaced around
+	// the arc above it. Spacing all of them together would walk the first bead off
+	// to one side of the pendant.
+	g.pos[pendantLen] = [2]int{g.cx, g.cy + g.ry}
+
+	// Beads that share another bead's place take no slot of their own: a second
+	// visit to a bead is drawn as that same bead. They are filled in last, once
+	// every real position is known.
+	var shared []int
+	var own []int
+	for i := pendantLen + 1; i < n; i++ {
+		if beads[i].SameAs > 0 {
+			shared = append(shared, i)
+			continue
 		}
+		own = append(own, i)
+	}
+
+	// The decades: spaced evenly by arc length all the way round, starting just
+	// past the pinned bead and coming back to just before it.
+	//
+	// One extra slot is asked for and its last entry dropped, so no bead lands on
+	// top of the pinned one — the run's two ends are the same point on a closed
+	// circle.
+	if len(own) > 0 {
+		for i, a := range arcAngles(len(own)+1, rx, ry) {
+			if i == len(own) {
+				break
+			}
+			g.pos[own[i]] = [2]int{
+				g.cx + int(math.Round(float64(rx)*math.Cos(a))),
+				g.cy - int(math.Round(float64(ry)*math.Sin(a))),
+			}
+		}
+	}
+
+	for _, i := range shared {
+		g.pos[i] = g.pos[beads[i].SameAs-1]
 	}
 	return g
 }
@@ -309,7 +369,14 @@ func drawRosary(g ringGeometry, beads []Bead, cursor, glow, fade int, lines []st
 	// The ring. The bead at the cursor is drawn as a halo rather than as its own
 	// kind of bead, so the eye finds it by shape and not only by colour.
 	for i, b := range beads {
-		p := g.pos[i]
+		// Two beads can share a cell — the close of the rosary is a second visit to
+		// the bead it began on. Whichever is drawn LAST would win, so the one that
+		// is not current yields: otherwise standing on the first of them would see
+		// its halo overwritten by the second's plain glyph.
+		if i != cursor && g.pos[i] == g.pos[cursor] {
+			continue
+		}
+
 		glyph := b.Kind.Glyph()
 		// The cursor normally becomes a halo, but not on the crucifix: its shape
 		// carries meaning, and swapping it for a bead would make the cross vanish
@@ -318,7 +385,7 @@ func drawRosary(g ringGeometry, beads []Bead, cursor, glow, fade int, lines []st
 		if i == cursor && b.Kind != Cross {
 			glyph = currentGlyph(glow)
 		}
-		c.set(p[0], p[1], []rune(glyph)[0])
+		c.set(g.pos[i][0], g.pos[i][1], []rune(glyph)[0])
 	}
 
 	// The mystery, centred in the ring. Each line is centred on its own here

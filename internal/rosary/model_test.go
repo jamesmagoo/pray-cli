@@ -3,7 +3,6 @@ package rosary
 import (
 	"charm.land/lipgloss/v2"
 
-	"slices"
 	"strings"
 	"testing"
 
@@ -14,10 +13,10 @@ import (
 // without a terminal: build a state, send it a message, look at what comes back.
 // That is the practical payoff of keeping all state in one value.
 
-func TestQuitKeys(t *testing.T) {
+func TestFinishKeys(t *testing.T) {
 	m := praying(t)
 
-	for _, key := range []string{"q", "esc", "ctrl+c"} {
+	for _, key := range []string{"x", "esc", "ctrl+c"} {
 		t.Run(key, func(t *testing.T) {
 			// tea.Key is what the runtime builds from a real key press; here we
 			// build one directly. Code is the rune or special key pressed.
@@ -37,7 +36,7 @@ func TestQuitKeys(t *testing.T) {
 
 			_, cmd := m.Update(msg)
 			if cmd == nil {
-				t.Fatalf("%q did not quit", key)
+				t.Fatalf("%q did not finish", key)
 			}
 			// A Cmd is a function returning a Msg. Running it tells us which
 			// command it was: tea.Quit's message is tea.QuitMsg.
@@ -48,9 +47,10 @@ func TestQuitKeys(t *testing.T) {
 	}
 }
 
-func TestOtherKeysDoNotQuit(t *testing.T) {
+func TestOtherKeysDoNotFinish(t *testing.T) {
 	m := praying(t)
-	_, cmd := m.Update(tea.KeyPressMsg{Code: 'x'})
+	// 'z' is bound to nothing. ('x' finishes, so it cannot be used here.)
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'z'})
 	if cmd != nil {
 		t.Fatal("an unhandled key returned a command; it should leave the state alone")
 	}
@@ -82,7 +82,7 @@ func TestViewShowsThePrayer(t *testing.T) {
 	// The rosary opens on the Sign of the Cross. The keys hint is checked
 	// separately (TestHintIsInTheCornerNotTheRing): its words are individually
 	// styled now, so a literal match on the whole phrase would not survive.
-	for _, want := range []string{"Sign of the Cross", "Amen.", "quit"} {
+	for _, want := range []string{"Sign of the Cross", "Amen.", "finish"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the view is missing %q", want)
 		}
@@ -106,14 +106,21 @@ func TestLineBreaksAreNotReflowed(t *testing.T) {
 	// Every line of every prayer must appear intact among the lines drawn:
 	// nothing is reflowed or shortened.
 	for i, b := range m.beads {
-		for _, w := range b.Says {
-			lines := frameLines(b, w, "")
+		// j matters: a bead can hold several prayers, so the cursor must point at
+		// the one being checked. Leaving m.say at 0 would compare every prayer
+		// against the first one's panel.
+		for j, w := range b.Says {
+			// The prayer is drawn in its own panel beside the ring, so that is
+			// where its lines must appear, intact.
+			m.cursor, m.say = i, j
+			panel := stripEscapes(prayerPanel(m))
 			for _, want := range w.Lines {
 				if want == "" {
 					continue
 				}
-				if !slices.Contains(lines, want) {
-					t.Errorf("bead %d: line was altered or dropped: %q", i, want)
+				if !strings.Contains(panel, want) {
+					t.Errorf("bead %d (%s) prayer %d (%s): line was altered or dropped: %q",
+						i, b.Name, j, w.Title, want)
 				}
 			}
 		}

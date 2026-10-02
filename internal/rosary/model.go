@@ -82,9 +82,20 @@ func (m model) mystery() (string, bool) {
 // one bead, and remains in force until another bead announces the next, with
 // nothing to clear and no state to keep in sync.
 func (m model) announced() int {
+	// Walk back over PRAYERS, not beads: a junction bead finishes the previous
+	// decade before opening the new one, so the announcement sits partway through
+	// it. On the current bead only the prayers up to and including the current one
+	// count — a mystery announced later on this same bead has not been reached.
 	for i := m.cursor; i >= 0; i-- {
-		if n := m.beads[i].Announces; n > 0 {
-			return n
+		says := m.beads[i].Says
+		last := len(says) - 1
+		if i == m.cursor {
+			last = min(m.say, last)
+		}
+		for j := last; j >= 0; j-- {
+			if n := says[j].Announces; n > 0 {
+				return n
+			}
 		}
 	}
 	return 0
@@ -231,7 +242,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// and returning early keeps the two phases from sharing key logic.
 		if m.choosing {
 			switch msg.String() {
-			case "q", "esc", "ctrl+c":
+			case "x", "esc", "ctrl+c":
 				return m, tea.Quit
 			case "up", "k":
 				if m.choice > 0 {
@@ -264,7 +275,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.prev() {
 				return m, m.startStep()
 			}
-		case "q", "esc", "ctrl+c":
+		case "x", "esc", "ctrl+c":
 			// tea.Quit is a command, not a function call: we hand it back and
 			// the runtime shuts the program down cleanly, restoring the
 			// terminal. Never call os.Exit from inside a Bubble Tea program.

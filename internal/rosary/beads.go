@@ -13,15 +13,34 @@ import (
 // rosary the beads differ in size, not just in which prayer is said.
 type Kind int
 
+// There are two bead sizes and the crucifix. Nothing else: a rosary's beads differ
+// in size, and the cross differs in shape.
 const (
-	// Large is an Our Father bead: bigger, and set apart from its neighbours.
+	// Large is the bigger bead: the five that open the decades.
 	Large Kind = iota
-	// Small is a Hail Mary bead: the ones that make up a decade.
+	// Small is the lesser bead: the Hail Marys, and the pendant's chain.
 	Small
-	// Link is chain rather than a bead — where a Glory Be is said.
-	Link
-	// Cross is the crucifix.
+	// Cross is the crucifix. Not a bead size: its shape carries meaning, so it is
+	// always a cross.
 	Cross
+)
+
+// ── THE TWO BEAD GLYPHS — change these to restyle the rosary ────────────────
+//
+// There are exactly two bead sizes, one slightly bigger than the other. Both
+// MUST be one cell wide or the ring shears (ROSARY-TUI.md §2); every pair below
+// has been measured at 1 cell.
+//
+// Candidates, big / small:
+//
+//	"◯" "○"   large / medium hollow   — the default: big, and the two sizes read
+//	"⬤" "●"   heavy / medium filled   — biggest and solid, but the two look alike
+//	"●" "○"   filled / hollow         — strong contrast, though of fill not size
+//	"●" "•"   filled / bullet
+//	"○" "◦"   medium / small hollow   — most delicate
+var (
+	bigBead   = "⬤"
+	smallBead = "●"
 )
 
 // Glyph is the character drawn for a bead of this kind.
@@ -29,14 +48,12 @@ const (
 // Every glyph must be one cell wide or the ring shears. See ROSARY-TUI.md §2.
 func (k Kind) Glyph() string {
 	switch k {
-	case Large:
-		return "●"
 	case Cross:
 		return "✠"
-	case Link:
-		return "◦"
+	case Small:
+		return smallBead
 	default:
-		return "○"
+		return bigBead
 	}
 }
 
@@ -47,6 +64,16 @@ func (k Kind) Glyph() string {
 type Words struct {
 	Title string
 	Lines []string
+
+	// Announces is which mystery this PRAYER declares: 1..5, or 0 for one that
+	// declares none.
+	//
+	// It is on the prayer rather than on the bead because a bead can hold several
+	// prayers and the mystery changes partway through: the big bead at a junction
+	// says the previous decade's Glory Be and Fatima Prayer first, and only then
+	// the Our Father that opens the new decade. Announcing on the bead changed the
+	// mystery too early — while the previous decade was still being finished.
+	Announces int
 
 	// prayerID is set by Say instead of Lines: the text is then loaded from
 	// internal/prayers/data at startup. Resolving it there rather than here keeps
@@ -81,31 +108,22 @@ func (w Words) resolve(lang string) (Words, error) {
 // Bead is one stop on the rosary.
 type Bead struct {
 	Kind Kind
-	Name string  // what to call it in the status line, e.g. "Hail Mary"
+
+	// Name identifies the bead — "Hail Mary", "Our Father". It is not what the
+	// screen shows: the heading names the PRAYER being said (see prayerPanel),
+	// since a bead can hold several. It is the fallback title for a bead with no
+	// prayers, and what tests report when one is wrong.
+	Name string
+
 	Says []Words // one or more prayers, said in order
 
-	// Nth and Of number a bead within its run, for "Hail Mary 3 of 10". Zero for
-	// beads that don't come in runs.
-	Nth, Of int
-
-	// Announces is which mystery this bead declares: 1..5, or 0 for a bead that
-	// declares none.
+	// SameAs, when non-zero, means this bead is drawn at the same place as bead
+	// SameAs-1 rather than taking its own place on the ring. It is 1-based so that
+	// the zero value means "has its own place".
 	//
-	// The mystery is ANNOUNCED at a bead — traditionally the Our Father opening
-	// the decade — and is then contemplated until the next announcement. It is
-	// declared explicitly in sequence.go rather than worked out from the bead's
-	// position, so that where a mystery is named is your decision and not a
-	// consequence of how the loop happens to be written.
-	Announces int
-}
-
-// Label names the bead on screen.
-//
-// Just the name: Nth and Of are kept on the Bead because they describe the
-// structure, but they are deliberately not shown. A count on screen pulls the eye
-// to the number instead of the prayer.
-func (b Bead) Label() string {
-	return b.Name
+	// This is how the rosary closes where it began: the final prayers are a second
+	// visit to the first big bead, drawn as one bead but prayed separately.
+	SameAs int
 }
 
 // builder accumulates the sequence, so sequence.go reads as a description of a
@@ -119,26 +137,62 @@ func (s *builder) add(k Kind, name string, says ...Words) {
 	s.beads = append(s.beads, Bead{Kind: k, Name: name, Says: says})
 }
 
-// announce marks the bead most recently added as declaring mystery n (1..5).
+// Announcing returns a copy of w that declares mystery n (1..5).
 //
-// Call it straight after the add() for the bead that names the mystery:
+// Wrap the PRAYER at which the mystery changes:
 //
-//	s.add(Large, "Our Father", Say("our-father"))
-//	s.announce(decade)
+//	s.add(Large, "Our Father", gloryBe, fatima, Announcing(1, Say("our-father")))
 //
-// From that bead onwards the mystery is shown, until another bead announces the
-// next one. Nothing is cleared in between, which is what makes the mystery stay
-// on screen through the ten Hail Marys that follow.
-func (s *builder) announce(n int) {
-	if len(s.beads) == 0 {
-		panic("rosary: announce() called before any bead was added")
-	}
-	s.beads[len(s.beads)-1].Announces = n
+// From that prayer onwards the mystery is shown, until another announces the next
+// one. Nothing is cleared in between, which is what keeps the mystery on screen
+// through the ten Hail Marys that follow.
+//
+// Announcing on the prayer rather than the bead matters at a junction: the big
+// bead there finishes the previous decade (Glory Be, Fatima) before opening the
+// new one, so the mystery must change partway through the bead, not on arrival.
+func Announcing(n int, w Words) Words {
+	w.Announces = n
+	return w
 }
 
-// run appends n identical beads, numbered 1..n so each can say "3 of 10".
+// run appends n identical beads.
 func (s *builder) run(k Kind, n int, name string, says ...Words) {
-	for i := 1; i <= n; i++ {
-		s.beads = append(s.beads, Bead{Kind: k, Name: name, Says: says, Nth: i, Of: n})
+	for i := 0; i < n; i++ {
+		s.beads = append(s.beads, Bead{Kind: k, Name: name, Says: says})
 	}
+}
+
+// addAt appends a bead that is drawn at the same place as an existing one.
+//
+// It exists for the close of the rosary: praying returns to the bead it began on,
+// so that bead is visited twice. A flat sequence cannot revisit an entry, so the
+// second visit is its own bead sharing the first one's cell — one bead on screen,
+// two stops in the sequence. The user prays each visit's prayers in turn instead
+// of all of them at once.
+//
+// SameAs is honoured by the geometry (see ring.go), which gives this bead the
+// position of bead `at` rather than a place of its own on the ring.
+func (s *builder) addAt(at int, k Kind, name string, says ...Words) {
+	if at < 0 || at >= len(s.beads) {
+		panic("rosary: addAt refers to a bead that does not exist")
+	}
+	s.beads = append(s.beads, Bead{Kind: k, Name: name, Says: says, SameAs: at + 1})
+}
+
+// Announces is the mystery this bead declares, or 0 for none.
+//
+// A bead declares whatever its prayers declare. Which prayer does the announcing
+// decides WHEN the mystery changes (see Announcing); this reports only whether
+// the bead is where it happens.
+//
+// Nothing in the rendering path uses it — the display asks announced(), which
+// needs the prayer, not the bead. It is here because "which bead announces this
+// mystery?" is the useful question when checking the sequence's structure.
+func (b Bead) Announces() int {
+	for _, w := range b.Says {
+		if w.Announces > 0 {
+			return w.Announces
+		}
+	}
+	return 0
 }

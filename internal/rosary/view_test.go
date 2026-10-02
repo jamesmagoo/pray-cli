@@ -33,8 +33,8 @@ func TestHintIsInTheCornerNotTheRing(t *testing.T) {
 	m := praying(t)
 
 	// Not in the ring: the lines handed to drawRosary carry no hint text.
-	for _, l := range frameLines(m.bead(), m.words(), "") {
-		if strings.Contains(l, "quit") {
+	for _, l := range mysteryLines(m.set, m.announced()) {
+		if strings.Contains(l, "finish") {
 			t.Error("the hint is inside the ring")
 		}
 	}
@@ -46,7 +46,7 @@ func TestHintIsInTheCornerNotTheRing(t *testing.T) {
 	// On screen: in the lower half, near the left edge.
 	found := -1
 	for i, r := range rows {
-		if strings.Contains(r, "quit") {
+		if strings.Contains(r, "finish") {
 			found = i
 		}
 	}
@@ -116,7 +116,7 @@ func stripEscapes(s string) string {
 func TestMysteryInsideRingPrayerToTheRight(t *testing.T) {
 	m := praying(t)
 	for i, b := range m.beads {
-		if b.Announces == 1 {
+		if b.Announces() == 1 {
 			m.cursor = i + 2 // a Hail Mary within the first decade
 			break
 		}
@@ -159,8 +159,15 @@ func TestMysteryInsideRingPrayerToTheRight(t *testing.T) {
 func TestMysteryIsCentredInTheRing(t *testing.T) {
 	m := praying(t)
 	for i, b := range m.beads {
-		if b.Announces == 1 {
+		if b.Announces() == 1 {
 			m.cursor = i
+			// The announcement sits partway through a junction bead, so stand on
+			// the prayer that makes it.
+			for j, w := range b.Says {
+				if w.Announces > 0 {
+					m.say = j
+				}
+			}
 			break
 		}
 	}
@@ -234,8 +241,15 @@ func TestLayoutDoesNotShiftBetweenPrayers(t *testing.T) {
 func TestMysteryIsStyled(t *testing.T) {
 	m := praying(t)
 	for i, b := range m.beads {
-		if b.Announces == 1 {
+		if b.Announces() == 1 {
 			m.cursor = i
+			// The announcement sits partway through a junction bead, so stand on
+			// the prayer that makes it.
+			for j, w := range b.Says {
+				if w.Announces > 0 {
+					m.say = j
+				}
+			}
 			break
 		}
 	}
@@ -252,4 +266,35 @@ func TestMysteryIsStyled(t *testing.T) {
 		return
 	}
 	t.Fatal("the mystery was not drawn in the ring")
+}
+
+// The heading names the PRAYER being said, not the bead.
+//
+// A junction bead carries the Glory Be, the Fatima Prayer and the next Our
+// Father. Naming the bead showed "Our Father" above the words of the Glory Be —
+// the bead is where you are, the prayer is what you are saying.
+func TestHeadingNamesThePrayerNotTheBead(t *testing.T) {
+	m := praying(t)
+
+	checked := 0
+	for i, b := range m.beads {
+		if len(b.Says) < 2 {
+			continue // only multi-prayer beads can show the wrong name
+		}
+
+		for j, w := range b.Says {
+			m.cursor, m.say = i, j
+
+			head := strings.TrimSpace(strings.Split(stripEscapes(prayerPanel(m)), "\n")[0])
+			if head != w.Title {
+				t.Errorf("bead %d (%s) prayer %d: heading is %q, want %q",
+					i, b.Name, j, head, w.Title)
+			}
+			checked++
+		}
+	}
+
+	if checked == 0 {
+		t.Fatal("no multi-prayer beads found; this test checked nothing")
+	}
 }

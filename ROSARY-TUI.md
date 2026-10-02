@@ -18,17 +18,17 @@ Read Part I once. Part II is a reference to come back to.
 `internal/rosary/mysteries.go`. Nothing else.**
 
 ```go
-s.add(Large, "Our Father", Say("our-father"))        // from data/
-s.run(Small, 10, "Hail Mary", Say("hail-mary"))      // ten of them
-s.add(Link, "Glory Be", Text("Glory Be", "line…"),   // two prayers,
-                        Text("Fatima Prayer", "…"))  // one bead
+s.add(Large, "Our Father",
+    gloryBe, fatima,                            // two prayers, one bead
+    Announcing(decade, Say("our-father")))      // the mystery changes here
+s.run(Small, 10, "Hail Mary", Say("hail-mary")) // ten of them
 ```
 
 - `Say("id")` takes the prayer from `internal/prayers/data/<id>/`
 - `Text("Title", "line", "line")` is words written inline, for anything not in
   `data/` yet
 - Give a bead several prayers and **space** steps through them before moving on
-- `s.announce(n)` marks the bead just added as declaring mystery `n` (1–5)
+- `Announcing(n, prayer)` marks that **prayer** as declaring mystery `n` (1–5)
 
 The ring draws itself around whatever you define. You do not need to touch the
 geometry, the colours, or the drawing code.
@@ -42,12 +42,27 @@ It is a recipe per question, with the constraints that will bite you.
 | Bead glyphs / "size" | `beads.go` | `Kind.Glyph()` |
 | Bead colours | `view.go` | `beadDim`, `beadLarge`, `crossBead`, `beadCurrent` |
 | Bead order, prayers | `sequence.go` | `Sequence()`, `Pendant()` |
-| Mysteries | `mysteries.go` | the set, and `s.announce(n)` for where |
+| Pendant gaps | `sequence.go` | `PendantGapAfter(i)` |
+| Mysteries | `mysteries.go` | the set, and `Announcing(n, …)` for where |
 | Ring roundness | `ring.go` | `rx := ry * 2` |
 | Ring tightness | `ring.go` | `const gutter = 3` |
 | Gap / direction | `ring.go` | `gapStart`, `gapArc` |
 | Step indicator | `animate.go` | `glowFrames`, `bloom`, `glowRamp` |
 | Fade-in speed | `animate.go` | `fadeFrames`, `frameRate` |
+| Keys | `model.go` | the `tea.KeyPressMsg` switch in `Update` |
+
+### The keys
+
+| Key | Does |
+|---|---|
+| `space` (or `enter`, `→`, `l`) | next prayer; at a bead's last prayer, the next bead |
+| `←` (or `h`, `backspace`) | back one prayer |
+| `x` (or `esc`, `ctrl+c`) | finish |
+
+On the chooser screen, `↑`/`↓` pick the mysteries and `space` begins.
+
+**Space is `"space"`, not `" "`.** See Part I §6 — matching the wrong one fails
+silently.
 
 ---
 
@@ -412,7 +427,8 @@ every position and visibly distorts the shape. `int(math.Round(x))` is correct.
 | `beads.go` | The *types* behind it: `Bead`, `Words`, `Say`, `Text`, `builder` |
 | `ring.go` | *Geometry*: where each bead goes; places plain runes on a grid |
 | `style_grid.go` | *Colour*: second pass, adds escapes to the finished grid |
-| `view.go` | *Content*: what text goes inside the ring; colour definitions |
+| `view.go` | *Content*: the mystery inside the ring, the prayer panel beside it, colours |
+| `animate.go` | *Time*: the bead's flare and the prayer's fade-in |
 | `model.go` | *State and the loop*: the Bubble Tea `Model` |
 | `run.go` | Entry point; the only thing `internal/cli` touches |
 
@@ -492,9 +508,9 @@ A bead takes as many prayers as you give it, and space steps through them in
 turn before moving to the next bead:
 
 ```go
-s.add(Link, "Glory Be",
-    Text("Glory Be", "Glory be to the Father,", "..."),
-    Text("Fatima Prayer", "O my Jesus, forgive us our sins,", "..."))
+s.add(Large, "Our Father",
+    gloryBe, fatima,                              // closing the decade before
+    Announcing(decade, Say("our-father")))        // opening this one
 ```
 
 That is two presses of space on one bead.
@@ -536,30 +552,49 @@ The obvious implementation is to work out the mystery from the bead's position �
 liturgical decision inside loop arithmetic: change how `Sequence()` is written and
 the mysteries move with it.
 
-Instead a bead **announces** a mystery, explicitly, in `sequence.go`:
+Instead a **prayer** announces a mystery, explicitly, in `sequence.go`:
 
 ```go
-s.add(Large, "Our Father", Say("our-father"))
-s.announce(decade)                 // ← this bead names mystery `decade`
+s.add(Large, "Our Father",
+    gloryBe, fatima,                            // closing the decade before
+    Announcing(decade, Say("our-father")))      // ← the mystery changes HERE
 s.run(Small, 10, "Hail Mary", Say("hail-mary"))
 ```
 
-Move that `announce()` call to a different bead and the mystery is named there
-instead. That is the entire mechanism, and it is the one knob you need.
+Wrap a different prayer in `Announcing()` and the mystery is named there instead.
+That is the entire mechanism, and it is the one knob you need.
+
+**Why the prayer and not the bead.** It was on the bead first, which changed the
+mystery the moment you arrived — so the Glory Be and Fatima Prayer, which *close
+the previous decade*, already showed the next decade's mystery. A junction bead
+spans two decades, so a per-bead announcement cannot express when the change
+happens. Per-prayer can.
 
 ### How it persists
 
-`model.mystery()` looks **backwards** from the cursor for the most recent
-announcement:
+`model.announced()` looks **backwards** from the cursor for the most recent
+announcement — over prayers, not beads, and on the current bead only as far as the
+prayer being said:
 
 ```go
 for i := m.cursor; i >= 0; i-- {
-    if n := m.beads[i].Announces; n > 0 {
-        return m.set.Mystery(n)
+    says := m.beads[i].Says
+    last := len(says) - 1
+    if i == m.cursor {
+        last = min(m.say, last)   // a later announcement on THIS bead is not yet reached
+    }
+    for j := last; j >= 0; j-- {
+        if n := says[j].Announces; n > 0 {
+            return n
+        }
     }
 }
-return "", false   // before the first announcement
+return 0   // before the first announcement
 ```
+
+That `min(m.say, last)` is the whole point: standing on the Glory Be of a junction
+bead, the Our Father two prayers later has not been prayed, so its announcement
+must not count yet.
 
 So a mystery is announced once and stays in force until another bead announces
 the next. There is nothing to clear, no "current mystery" field to keep in sync,
@@ -698,7 +733,7 @@ overlay pushes the rest of the row right and the screen shears.
 
 ### No counts
 
-"Hail Mary 3 of 10" and "bead 11 of 68" were removed deliberately. A count on
+"Hail Mary 3 of 10" and "bead 11 of 61" were removed deliberately. A count on
 screen turns praying into progress-watching: the eye goes to the number instead of
 the words. The beads already show where you are, which is the right place for it —
 in the object, not in text.
@@ -710,7 +745,7 @@ are simply not displayed.
 
 ```go
 type Bead struct {
-    Kind Kind      // Large | Small | Link | Cross — decides the glyph
+    Kind Kind      // Large | Small | Cross — decides the glyph
     Name string    // "Hail Mary"
     Says []Words   // one or more prayers, said in order
     Nth, Of int    // "3 of 10", set by run()
@@ -785,9 +820,12 @@ for pass := 0; pass < 400; pass++ {
 
 **1. `clears` — no bead on a letter.** The original check.
 
-**2. `spacedOut` — no two beads touching.** This one was added when the full
-68-bead rosary arrived. Without it the ring stops growing the moment the text
-fits, and the beads end up shoulder to shoulder:
+**2. `spacedOut` — no two beads in the same cell.** Added when the full rosary
+arrived: without it the ring stops growing the moment the contents fit, and beads
+can land on top of one another, losing one entirely.
+
+It once demanded a blank cell *between* neighbours, which read better but forced
+the ring far larger than its contents needed:
 
 ```
 Before:   ○○  ◦●  ○○ ○ ○○        ← touching pairs read as a smear
@@ -842,6 +880,93 @@ Sign of the Cross on it. The cross shows selection by colour and weight instead.
 
 > **The general point:** a selection indicator that *replaces* content is fine
 > when the content is interchangeable, and wrong when the shape carries meaning.
+
+### The pendant's shape
+
+The pendant is **crucifix — bead — gap — three beads — gap — the ring**, where the
+ring's first big bead is the start of the loop:
+
+```
+    ●  ●  ●     ← ring; the loop begins on its first big bead
+   ...
+       ●        ← three Hail Marys
+       ●
+       ●
+                ← gap
+       ●        ← Our Father
+       ✠        ← crucifix: Sign of the Cross, then the Apostles' Creed
+```
+
+Note the crucifix carries **two** prayers. A bead is a place you hold, not a
+single prayer — so which prayers sit on which bead is part of the structure, and
+`TestPendantShape` pins it by prayer title rather than only by bead kind. Bead
+kinds alone would not notice a prayer moving from one bead to its neighbour.
+
+Two knobs in `sequence.go`:
+
+```go
+func Pendant() int            { return 5 }            // beads below the ring
+func PendantGapAfter(i) bool  { return i == 1 || i == 4 }  // blank rows of chain
+```
+
+`Pendant()` must match the beads you put at the top of `Sequence()`.
+`PendantGapAfter` is indexed from the crucifix (bead 0), and a gap after the last
+pendant bead is what separates the chain from the ring.
+
+### The rosary closes where it began
+
+A rosary has **exactly five big beads**, one per decade. The closing prayers — the
+fifth decade's Glory Be and Fatima Prayer, then the Hail Holy Queen — are said
+back at the bead praying *started* on: the fingers come round the loop and arrive
+where they began.
+
+Giving them beads of their own put **seven** big beads on the ring, two of them
+stranded beside the join.
+
+Appending them to the starting bead fixed the count but broke the praying: that
+bead then carried all five prayers, so you prayed the entire close *before* the
+first decade.
+
+The answer is a second bead at the **same position**:
+
+```go
+s.addAt(Pendant(), Large, "Hail Holy Queen", gloryBe, fatima, hailHolyQueen)
+```
+
+`Bead.SameAs` marks it as sharing another bead's cell, so the geometry gives it no
+slot of its own. One bead on screen, two stops in the sequence: the opening bead
+says Glory Be and Our Father, and the closing stop — the same bead, visited again
+— says Glory Be, Fatima and Hail Holy Queen.
+
+> **A flat sequence cannot revisit an entry.** Rather than model revisits, a
+> revisit *is* a second entry that shares the first's position. That keeps the
+> cursor a plain index while letting the drawing show one bead.
+
+**The trap this creates:** two beads at one cell means whichever is drawn last
+wins. Standing on the opening bead, the closing bead was drawn after it and
+overwrote the halo — the highlight simply disappeared. So the drawing skips any
+bead that shares the current bead's cell:
+
+```go
+if i != cursor && g.pos[i] == g.pos[cursor] {
+    continue   // the bead that is not current yields the cell
+}
+```
+
+### The first ring bead is pinned, not spaced
+
+The bead where the loop begins and ends sits **directly above the pendant**, at
+the bottom of the circle:
+
+```go
+g.pos[pendantLen] = [2]int{g.cx, g.cy + g.ry}   // pinned to the join
+// ...the rest are then spaced by arc length around the circle
+```
+
+Spacing all the ring beads together walks that one off to one side of the
+pendant — the join stops looking like a join. So it is placed explicitly and the
+decades are distributed from there, asking `arcAngles` for one extra slot and
+dropping the last so nothing lands back on top of it.
 
 ### The pendant comes from the sequence
 
@@ -989,12 +1114,12 @@ actually broke:
 
 | Test | Guards |
 |---|---|
-| `TestNoBeadCollidesWithText` | No bead on a letter, for **every** bead of the decade. The invariant the whole sizing loop exists to maintain. |
+| `TestNoBeadCollidesWithTheMystery` | No bead on a letter, for **every** bead of the decade. The invariant the whole sizing loop exists to maintain. |
 | `TestHighlightFollowsCursor` | Exactly one bead highlighted, and it tracks the cursor. Counts `\x1b[1;7` (reverse video). |
 | `TestStanzasShareALeftEdge` | Prayer lines share a left margin — catches the ragged-diamond failure. |
 | `TestViewBeforeFirstResize` | The one frame before the size is known still draws. |
 
-`TestNoBeadCollidesWithText` loops over all twelve beads rather than checking
+`TestNoBeadCollidesWithTheMystery` loops over all twelve beads rather than checking
 one, because each bead shows a different prayer, so each produces a differently
 sized ring — twelve geometries, not one.
 
@@ -1303,7 +1428,7 @@ What's worth pinning:
 | Test | Guards |
 |---|---|
 | `TestMovingABeadStartsTheGlow` | a move sets the counter and schedules a frame |
-| `TestGlowFadesAndStops` | the counter decrements **and the last frame returns nil** |
+| `TestAnimationsFadeAndStop` | the counter decrements **and the last frame returns nil** |
 | `TestStrayFrameIsHarmless` | a frame arriving when idle doesn't drive the counter negative |
 | `TestRapidMovesResetRatherThanStack` | fast keys reset the animation, not stack it |
 | `TestGlowStyleIsSafeAtTheEdges` | the ramp index is clamped at both ends |
@@ -1316,7 +1441,7 @@ I verified both of these catch real bugs by breaking the code deliberately:
 
 ```
 # forced the re-arm to always happen:
---- FAIL: TestGlowFadesAndStops
+--- FAIL: TestAnimationsFadeAndStop
     the final frame re-armed the timer; the animation would never stop
 
 # let the counter go negative:
@@ -1395,15 +1520,24 @@ constraints that will bite you.
 `beads.go`, `Kind.Glyph()`:
 
 ```go
+// beads.go — the two glyphs, and the cross
+var (
+    bigBead   = "⬤"   // the five that open the decades
+    smallBead = "●"   // Hail Marys, and the pendant's chain
+)
+
 func (k Kind) Glyph() string {
     switch k {
-    case Large: return "●"   // Our Father beads
-    case Cross: return "✠"   // the crucifix
-    case Link:  return "◦"   // chain, where a Glory Be is said
-    default:    return "○"   // Hail Mary beads
+    case Cross: return "✠"
+    case Small: return smallBead
+    default:    return bigBead
     }
 }
 ```
+
+There are exactly **two bead sizes plus the crucifix**. A `Link` kind existed
+while the Glory Be had its own bead on the chain; once junctions became single
+beads nothing constructed one, and it was removed.
 
 ### "Size" is really glyph weight
 
@@ -1428,7 +1562,7 @@ So `Large: "⬤"` and `Small: "○"` gives much more contrast than `●`/`○`.
 `view.go`:
 
 ```go
-beadDim     = Foreground(gold).Faint(true)   // Small + Link
+beadDim     = Foreground(gold).Faint(true)   // Small
 beadLarge   = Foreground(gold)               // Large
 crossBead   = Foreground(gold).Bold(true)    // Cross
 beadCurrent = Foreground(currentRest).Bold(true)
@@ -1459,7 +1593,7 @@ All in `sequence.go`. Four calls, nothing else:
 ```go
 s.add(Large, "Our Father", Say("our-father"))        // one bead
 s.run(Small, 10, "Hail Mary", Say("hail-mary"))      // ten identical beads
-s.announce(decade)                                    // this bead names mystery n
+Announcing(decade, Say("our-father"))                 // this PRAYER names mystery n
 func Pendant() int { return 6 }                       // how many hang below the ring
 ```
 
@@ -1470,8 +1604,8 @@ Common edits:
 | A different decade length | `s.run(Small, 7, ...)` — the ring resizes itself |
 | Three decades, not five | change the loop bound |
 | A prayer between decades | `s.add(...)` inside the loop, after the Glory Be |
-| Two prayers on one bead | pass two `Words`: `s.add(Link, "Glory Be", Text(...), Text(...))` |
-| Announce the mystery elsewhere | move the `s.announce(decade)` line to that bead |
+| Two prayers on one bead | pass two `Words`: `s.add(Large, "Our Father", gloryBe, fatima)` |
+| Announce the mystery elsewhere | wrap a different prayer in `Announcing(decade, …)` |
 | A longer pendant | add beads at the top, and raise `Pendant()` to match |
 
 **`Pendant()` must match the beads you put at the top.** It is the count drawn
@@ -1576,48 +1710,60 @@ list the wrong length.
 
 Honest state of the prototype.
 
-### 1. It needs a large terminal
+### 1. It needs a wide terminal
 
-**Measured:** the full 68-bead rosary renders **83 columns × 37 rows** (68 beads,
-5 of them on the pendant, 63 on the ring).
+**Measured:** the rosary plus its prayer panel renders **89 columns × 29 rows**,
+so an 80×24 terminal clips it. The ring itself is only 41×29.
 
-That is the honest geometry, not a bug. Two constraints drive it:
+The width is simple arithmetic, not a bug:
 
-- the longest prayer line is 44 columns, and the text sits inside the ring
-- 63 ring beads need a perimeter long enough to hold them without touching
+```
+41 (ring)  +  4 (gutter)  +  44 (prayer panel)  =  89
+```
 
-A smaller terminal clips the frame — `lipgloss.Place` cuts rather than scales, so
-beads at the edges silently vanish. (This bit me in a test: the highlight
-"disappeared" at bead 54 purely because the test window was too small.)
+The panel is 44 because that is the longest prayer line in the rosary
+(`as we forgive those who trespass against us;`), and it is a **fixed** width so
+the layout does not shift between prayers.
+
+`lipgloss.Place` clips rather than scales, so in a narrow terminal the beads at
+the edges silently vanish. (This bit me in a test once: a highlight "disappeared"
+purely because the test window was too small.)
 
 Options, roughly in order of how well each preserves the design:
 
-- **Re-break the `.md` lines shorter** (~30 columns). `RENDERING.md` already
-  contemplates this. Cheapest fix, and keeps line breaks an editorial choice.
-- **Fewer beads on the ring** — draw one decade at a time rather than all five,
-  with the ring as a progress indicator for the current decade.
-- **Scroll the prayer** inside a fixed ring. More machinery, and the prayer stops
-  being visible at a glance.
-- **Stacked fallback** below a width threshold, keeping the ring for wide
+- **Re-break the `.md` lines shorter** (~30 columns) — takes ~14 columns straight
+  off the panel. `RENDERING.md` already contemplates this, and it keeps line
+  breaks an editorial choice rather than an automatic one.
+- **Put the prayer below the ring** instead of beside it — one `JoinHorizontal` →
+  `JoinVertical` in `render`. Trades width for height.
+- **Stack below a width threshold**, keeping the side-by-side layout for wide
   terminals.
 
-This is the main open design question, and it is a question about how the prayer
-should read rather than about code.
+Height is 29 rows: the ring (`ry=9` → 19 rows) plus the pendant and its gaps.
+Shrinking it means a smaller ring, which `rx = ry * 2` ties to the width.
 
-### 2. Beads still bunch slightly at top and bottom
+### 2. The two closing beads sit adjacent on the ring
+
+The fifth decade's Glory Be/Fatima bead and the Hail Holy Queen are two separate
+beads, and they end up next to each other at the end of the ring — so there is one
+`⬤⬤` pair left. Unlike the decade junctions (which were a real modelling error,
+now fixed) these genuinely are two stops, so it is a question of how you want the
+close prayed, not a bug: merge them in `sequence.go` if a single bead is right.
+
+### 3. Beads still bunch slightly at top and bottom
 
 `arcAngles` spaces by distance, which fixed the gross clumping, but the ellipse
 curves tightest at its ends and the rounding to integer cells still gathers beads
 there. Visible as `○ ○ ○  ○ ○ ○` rather than perfectly even spacing.
 
-### 3. `data/` has only three prayers
+### 4. `data/` has only three prayers
 
 `our-father`, `hail-mary`, `st-carlo-acutis`. Everything else in `sequence.go`
 uses `Text(...)` with abbreviated words — the Creed and Hail Holy Queen are
 placeholders, not the full prayers. Swap each for `Say(...)` as it lands in
 `data/`.
 
-### 4. No decade/mystery concept
+### 5. No decade/mystery concept
 
 There is no notion of which mystery is being meditated on, which is arguably the
 most important thing on screen when actually praying.
