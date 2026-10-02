@@ -206,11 +206,32 @@ func TestPendantHangsFromTheRing(t *testing.T) {
 		}
 	}
 
-	// The top bead sits one row below the ring's bottom — the gap between the
-	// three Hail Marys and the ring.
+	// The top bead hangs BELOW the ring's bottom bead with a blank row between —
+	// the gap declared after the last pendant bead.
+	//
+	// This previously asserted the adjacent row while its own comment said "one row
+	// below", and so locked in a bug: the gap was counted into the canvas height
+	// but never applied, because the placement loop decrements after the last bead
+	// and then ends. The bottom bead sat directly on the pendant.
 	top := g.pos[pendantLen-1][1]
-	if want := g.cy + g.ry + 1; top != want {
+	want := g.cy + g.ry + 1
+	if PendantGapAfter(pendantLen - 1) {
+		want++
+	}
+	if top != want {
 		t.Errorf("the pendant's top bead is at row %d, want %d", top, want)
+	}
+
+	// And the row between really is empty, so the gap is visible rather than merely
+	// arithmetic.
+	if PendantGapAfter(pendantLen - 1) {
+		between := g.cy + g.ry + 1
+		for i := range m.beads {
+			if g.pos[i][1] == between {
+				t.Errorf("bead %d sits at row %d, which should be the gap between the "+
+					"ring and the pendant", i, between)
+			}
+		}
 	}
 
 	// The crucifix is the far end.

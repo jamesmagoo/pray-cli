@@ -142,6 +142,10 @@ func mysteryLines(set MysterySet, announced int) []string {
 	//
 	// Plain text, because these rows are written onto the grid cell by cell and an
 	// escape sequence is not one cell wide. Colour is added in styleGrid.
+	// The set's name is NOT wrapped: it is a title and breaks badly ("The Glorious /
+	// Mysteries"), where a mystery's name has natural seams. The ring is sized to
+	// clear whatever goes in it, so the set name is simply the widest line it has to
+	// accommodate — see mysteryWidth.
 	rows := []string{set.Name, ""}
 	return append(rows, wrapMystery(name)...)
 }
@@ -153,43 +157,89 @@ func mysteryLines(set MysterySet, announced int) []string {
 // and pushed the ring from 18x9 to 24x12 — which breaks the chain, since beads
 // then sit more than a row apart and leave empty rows down the sides.
 //
-// 28, chosen by measuring rather than by taste: it is the width at which the ring
-// comes out 18x9 — the size it was before the other three sets arrived, and the
-// size that keeps the beads one row apart with no gaps in the chain. Narrower
-// shrinks the ring and crowds them (at 24 the touching pairs go from 4 to 8);
-// wider grows it until rows appear with no bead on them at all.
+// 20, chosen by measuring rather than by taste: it is the width at which the ring
+// comes out 16x10, the roundest shape that keeps every bead on its own cell with
+// no row left empty. Wider grows the ring until rows appear with no bead on them
+// at all and the chain reads as broken strands; narrower does not shrink it
+// further, because the beads then set the size rather than the text.
 //
 // So this constant is really a dial on the RING, by way of the text it has to
 // clear. Change it and check TestTheRingHasNoBreaks.
-const mysteryWidth = 28
+//
+// It applies to the SET's name as well as the mystery's: "The Sorrowful
+// Mysteries" is 23 cells and was the widest line inside the ring, so wrapping only
+// the mysteries left the set name setting the floor.
+const mysteryWidth = 20
 
 // wrapMystery breaks a mystery's name onto as few lines as will fit mysteryWidth,
-// splitting only at spaces.
+// splitting only at spaces and BALANCING the lines it produces.
 //
-// Deliberately simple: these are short titles, not prose, and greedy wrapping puts
-// the break in a sensible place for every one of the twenty. If a future set needs
-// a particular break, give it one by shortening the name rather than teaching this
-// to hyphenate.
+// Balanced, not greedy, and the difference is visible. Greedy wrapping fills each
+// line to the limit before breaking, which is right for prose and wrong for a
+// title centred in a ring: "The Transfiguration" came out as "The" over
+// "Transfiguration", and "The Crowning with Thorns" as "The Crowning with" over a
+// lone "Thorns". Choosing the break that makes the lines most equal puts it where
+// a person would: "The Crowning" over "with Thorns".
+//
+// It tries every split point for two lines, then every pair for three, and keeps
+// the arrangement whose longest line is shortest. Twenty names of five or six
+// words each — the cost is nothing and the result needs no per-name special cases.
 func wrapMystery(name string) []string {
 	if lipgloss.Width(name) <= mysteryWidth {
 		return []string{name}
 	}
 
-	var lines []string
-	line := ""
-	for _, word := range strings.Fields(name) {
-		switch {
-		case line == "":
-			line = word
-		case lipgloss.Width(line)+1+lipgloss.Width(word) <= mysteryWidth:
-			line += " " + word
-		default:
-			lines = append(lines, line)
-			line = word
+	words := strings.Fields(name)
+	for lines := 2; lines <= len(words); lines++ {
+		if best := balancedSplit(words, lines); best != nil {
+			return best
 		}
 	}
-	if line != "" {
-		lines = append(lines, line)
+	return words // one word per line: nothing shorter is possible
+}
+
+// balancedSplit arranges words onto exactly n lines, each within mysteryWidth,
+// choosing the split whose longest line is shortest. Returns nil if n lines
+// cannot hold them.
+func balancedSplit(words []string, n int) []string {
+	var best []string
+	bestWidest := 1 << 30
+
+	// cuts holds the index after each line break; walk every combination.
+	var walk func(start int, cuts []int)
+	walk = func(start int, cuts []int) {
+		if len(cuts) == n-1 {
+			lines := linesFrom(words, cuts)
+			widest := 0
+			for _, l := range lines {
+				w := lipgloss.Width(l)
+				if w > mysteryWidth {
+					return // does not fit
+				}
+				if w > widest {
+					widest = w
+				}
+			}
+			if widest < bestWidest {
+				best, bestWidest = lines, widest
+			}
+			return
+		}
+		for i := start + 1; i < len(words); i++ {
+			walk(i, append(cuts, i))
+		}
+	}
+	walk(0, nil)
+	return best
+}
+
+// linesFrom joins words into lines broken at the given indices.
+func linesFrom(words []string, cuts []int) []string {
+	lines := make([]string, 0, len(cuts)+1)
+	prev := 0
+	for _, c := range append(append([]int{}, cuts...), len(words)) {
+		lines = append(lines, strings.Join(words[prev:c], " "))
+		prev = c
 	}
 	return lines
 }

@@ -113,7 +113,7 @@ func TestMysteryAppearsInsideTheRing(t *testing.T) {
 	}
 
 	inside := strings.Join(mysteryLines(m.set, m.announced()), "\n")
-	if !strings.Contains(inside, Sorrowful.Mysteries[2]) {
+	if !showsMystery(inside, Sorrowful.Mysteries[2]) {
 		t.Errorf("the ring does not name the third mystery:\n%s", inside)
 	}
 	if !strings.Contains(inside, Sorrowful.Name) {

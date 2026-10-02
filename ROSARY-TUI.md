@@ -44,7 +44,7 @@ It is a recipe per question, with the constraints that will bite you.
 | Bead order, prayers | `sequence.go` | `Sequence()`, `Pendant()` |
 | Pendant gaps | `sequence.go` | `PendantGapAfter(i)` |
 | Mysteries | `mysteries.go` | the set, and `Announcing(n, …)` for where |
-| Ring roundness | `ring.go` | `rx := ry * 2` |
+| Ring roundness | `ring.go` | `ringWidth(ry)` |
 | Ring tightness | `ring.go` | `const gutter = 3` |
 | Start / direction | `ring.go` | `ringStart`, `ringArc` |
 | Step indicator | `animate.go` | `glowFrames`, `bloom`, `glowRamp` |
@@ -449,6 +449,7 @@ every position and visibly distorts the shape. `int(math.Round(x))` is correct.
 | `model.go` | *State and the loop*: the Bubble Tea `Model` |
 | `phase.go` | Which of the three screens is showing: chooser, rosary, close |
 | `cross.go` | The crucifix: line-drawn art, and the cells it occupies |
+| `scripts/` | Design previews — run them, don't read them |
 | `run.go` | Entry point; the only thing `internal/cli` touches |
 
 The ordering is deliberate: structure → geometry → colour. Each layer depends
@@ -642,8 +643,8 @@ the ring does not know the prayer exists.
 being the binding constraint — the ring's size is now set almost entirely by the
 beads needing somewhere to sit. Two consequences followed:
 
-- **Grow on a fixed 2:1 ratio.** The old loop grew `rx` three times faster than
-  `ry`, which with small contents produced a wide flat hoop. Growing `rx = 2*ry`
+- **Grow on a fixed ratio.** The old loop grew `rx` three times faster than
+  `ry`, which with small contents produced a wide flat hoop. Growing on a fixed ratio
   keeps it round (§1).
 - **Beads may touch, but not collide.** The old rule demanded a blank cell between
   neighbours, which with 62 ring beads forced an 81×48 frame around a 27-column
@@ -741,8 +742,63 @@ into the new rosary's opening prayers. `TestBeginResetsTheRosary` calls `begin`
 directly for exactly this reason: going through the chooser hides the bug, because
 the chooser resets the cursor itself.
 
-Adding Joyful and Glorious needs no new code: write them in `mysteries.go`, add
-them to `Sets()`, and the chooser lists them.
+Adding a set needs no new code: write it in `mysteries.go`, add it to `Sets()`,
+and the chooser lists it. All four are there now — Joyful, Sorrowful, Glorious,
+Luminous — each carrying the days it is traditionally prayed:
+
+```go
+var Joyful = MysterySet{
+	Name: "The Joyful Mysteries",
+	Days: "Mondays and Saturdays",
+	Mysteries: [5]string{ ... },
+}
+```
+
+`Days` is guidance and nothing enforces it: any set may be prayed on any day, so
+nothing filters or pre-selects by it. The chooser simply shows the days of the
+highlighted set, as a caption under the list.
+
+### The opening screen
+
+```
+╭────────────────────────────────────────╮
+│                                        │
+│                    ║                   │
+│                  ══╬══                 │
+│                    ║                   │
+│                    ║                   │
+│                                        │
+│          The Most Holy Rosary          │   gold
+│       of the Blessed Virgin Mary       │   blue
+│                                        │
+│             ╶────────────╴             │
+│                                        │
+│       ▸ The Joyful Mysteries           │
+│         The Sorrowful Mysteries        │
+│         The Glorious Mysteries         │
+│         The Luminous Mysteries         │
+│                                        │
+│        Mondays and Saturdays           │
+│                                        │
+│      space to begin   x to finish      │
+│                                        │
+╰────────────────────────────────────────╯
+```
+
+Three things worth knowing about it:
+
+**The cross is the rosary's own `crossArt`**, rendered directly rather than copied,
+so restyling the crucifix restyles the opening screen with it.
+`TestTheChooserShowsTheRosarysOwnCross` is what keeps that true.
+
+**Two alignments on purpose.** The heading is CENTRED because it is a title; the
+list is LEFT-aligned because a list needs a common left edge to scan down. Both
+blocks are padded to one width before joining — `JoinVertical` centres line by
+line, not block by block, which is how a ragged box happens.
+
+**`Padding(1, 6)`, and the vertical 1 is the half that matters.** At `Padding(0, 3)`
+the border sat directly on the crown of the cross and on the keys line, which made
+the box feel tight however wide it was.
 
 ### The close: the transition is an absence
 
@@ -1063,10 +1119,15 @@ walk rather than a formula. It runs once at startup, at 20,000 steps — the wal
 quantises every angle to a step boundary, and 2,000 was enough to shift a big bead
 0.18° off true.
 
-### The pentagon is a consequence, not a construction
+### The pentagon was a construction, and it is gone
 
-The five big beads sit at exactly **72.00°** from each other. Nothing arranges
-them.
+> **Superseded.** This section describes how the ring worked while it was a
+> **visual circle** (`rx = 2*ry`). It no longer is — see "The ring's shape is a
+> trade" below — and the pentagon went with it. Kept because the reasoning explains
+> where the even spacing comes from, which is still true.
+
+At a 2:1 ring the five big beads sat at exactly **72.00°** from each other.
+Nothing arranged them.
 
 Each decade is eleven beads, and there are 55 on the ring, so evenly spacing 55
 slots around a **closed** loop puts every eleventh one at a fifth of the circle.
@@ -1080,6 +1141,19 @@ amount of even spacing fixes that — 55 divides by 5 only over a full turn.
 Closing the loop and hanging the pendant from the bottom bead (rather than through
 a gap beside it) made the arithmetic exact, and deleted a pile of scaffolding with
 it — see below.
+
+**Why it is gone.** The 72° only holds when the ring is a visual circle, and a
+visual circle is the *flattest possible shape at top and bottom* — an ellipse is
+flattest exactly where it crosses the vertical axis. At 2:1 the ring drew six beads
+in a straight horizontal line across its top and its bottom while the sides curved
+properly. Rounding the ring necessarily breaks the 72°, because the angles stop
+corresponding to distance travelled.
+
+The pentagon was a property of the construction, not of the design. What was
+actually wanted is **even spacing and symmetry**, and those are now tested
+directly — `TestTheBigBeadsAreEvenlySpaced` measures the gap along the CHAIN (11
+slots, matching a decade) and `TestTheRingIsSymmetric` mirrors every occupied cell
+about the centre column. Both survive a change of ratio; the angle test did not.
 
 **Why iterate rather than solve?** The closed forms here are long, easy to get
 subtly wrong, and hard to read six months later. A few hundred iterations of an
@@ -1196,6 +1270,63 @@ and they come back evenly spaced with the first at the bottom.
 
 A good sign when a model is corrected: the special cases that propped up the old
 one stop being necessary.
+
+### The pendant hangs below the ring, with a gap
+
+The pendant is drawn bottom-up from the crucifix, so the gap declared *after* bead
+`i` is the blank row **above** it:
+
+```go
+row := g.cy + g.ry + pendantRows() - 1
+if PendantGapAfter(pendantLen - 1) {
+    row++                     // ← the gap between the pendant and the ring
+}
+for i := 0; i < pendantLen; i++ {
+    g.pos[i] = [2]int{g.cx, row}
+    row--
+    if PendantGapAfter(i) {
+        row--
+    }
+}
+```
+
+That `row++` is not an off-by-one patch. The gap after the LAST pendant bead is the
+one separating the pendant from the ring's bottom bead, and bottom-up placement
+means it has to be applied *before* the loop rather than inside it. Without it the
+loop decrements past the final bead and then ends, so the row was counted into
+`pendantRows()` — and into the canvas height — but never used. The bottom bead sat
+directly on the pendant however `PendantGapAfter` was written.
+
+Worth noting how it survived: `TestPendantHangsFromTheRing` asserted the adjacent
+row while its own comment said *"one row below"*. A test can lock in a bug just as
+firmly as it can prevent one, and a comment disagreeing with its assertion is the
+tell.
+
+### Long mystery names wrap, and the wrap is balanced
+
+The ring is sized to clear whatever goes inside it, so an over-long name makes the
+whole rosary grow: "The Coronation of the Blessed Virgin Mary" is 41 cells and
+pushed the ring out until the chain broke. `wrapMystery` breaks it instead, at
+`mysteryWidth`.
+
+The wrap is **balanced, not greedy**, and the difference is visible. Greedy
+wrapping fills each line to the limit before breaking — right for prose, wrong for
+a title centred in a ring:
+
+```
+greedy:    The Crowning with        balanced:   The Crowning
+           Thorns                               with Thorns
+
+greedy:    The                      balanced:   The Transfiguration
+           Transfiguration                      (fits; no wrap at all)
+```
+
+It tries every split for two lines, then every pair for three, and keeps the
+arrangement whose longest line is shortest. Twenty names of five or six words — the
+cost is nothing, and it needs no per-name special cases.
+
+The SET's name is deliberately not wrapped: it is a title and breaks badly ("The
+Glorious / Mysteries"), where a mystery's name has natural seams.
 
 ### The pendant comes from the sequence
 
@@ -1363,6 +1494,26 @@ $ # (temporarily remove the block-padding line)
 
 A test that cannot fail is worse than no test, because it buys false
 confidence.
+
+### Some decisions cannot be made from a diff
+
+Colour and shape do not survive into a transcript, a code review, or a chat log —
+escape sequences arrive as literal text, so `\x1b[38;2;91;141;214m` is all anyone
+reads. The only honest place to judge a TUI's appearance is a terminal, running it.
+
+`scripts/` exists for that. Each script renders candidates **in colour** and
+asserts nothing:
+
+| Script | Shows |
+|---|---|
+| `shapes.sh` | The rosary at each candidate ring shape, with the three competing faults measured |
+| `swatch.sh` | Bead colours, with and without `Faint` |
+| `stars.sh` | Star glyphs, as the font actually paints them |
+
+`shapes.sh` is backed by `TestPreviewShapes`, a test that cannot fail by design —
+it is a renderer that happens to live in the test tree so it can reach the package's
+internals. Keep it that way: the moment a preview asserts something, it stops being
+safe to change the thing it previews.
 
 > ### Trap: `strings.Contains` cannot find text drawn on the grid
 >
@@ -1977,32 +2128,51 @@ The ring is sized **once** (`fixedRing`) against the largest mystery, then froze
 Its final size is set by whichever constraint binds last:
 
 ```go
-ry := textH/2 + 2            // starting height: contents + breathing room
+ry := textH/2 + 2                 // starting height: contents + breathing room
 for ; ry < 200; ry++ {
-    rx := ry * 2             // ← the aspect ratio
+    rx := ringWidth(ry)           // ← the aspect ratio lives here
     if clears(...) && spacedOut(...) { break }
 }
 ```
 
 | To make the ring… | Change |
 |---|---|
-| Rounder / flatter | the `rx := ry * 2` ratio. `2` is a visual circle (cells are ~2:1 tall); `3` is a wide oval, `1.5` a tall one |
+| Rounder / flatter | `ringWidth(ry)`. Currently `ry * 3 / 2`; see the trade below before changing it |
 | Bigger overall | `ry := textH/2 + 2` → a larger constant; it only ever grows from there |
 | Tighter around the text | `const gutter = 3` → smaller. This is the blank cells kept between a bead and the text |
-| Hold more beads without touching | `spacedOut` — change `if p == prev` to require a gap (`max(|dx|,|dy|) < 2`). **This made the frame 81×48 instead of 41×28**, so expect it to grow a lot |
+| Narrower text inside | `mysteryWidth` → smaller, which lets the ring shrink. Really a dial on the RING, by way of the text it has to clear |
 
-**Resist making the ring bigger.** It is the obvious response to beads that touch,
-and it is wrong. Measured at the current 55 beads:
+### The ring's shape is a trade, and `scripts/shapes.sh` shows it
 
-| Size | Touching pairs | Blank rows in the chain |
+Three faults compete, and no shape avoids all three. **Run the script and look** —
+this is not a decision to make from a table:
+
+```
+$ ./scripts/shapes.sh
+```
+
+| | What it is | Caused by |
 |---|---|---|
-| **18×9 (current)** | 4 | **0** |
-| 22×11 | 0 | 2 |
-| 26×13 | 0 | 5 |
+| **Flat run** | beads in a straight horizontal line across the top and bottom | a WIDE ring — an ellipse is flattest where it crosses the vertical axis |
+| **Empty rows** | rows with no bead; the chain reads as broken strands | a TALL ring — consecutive beads land more than one row apart |
+| **Pentagon error** | the five big beads not evenly spaced by angle | any ratio that is not a visual circle |
 
-A larger ring spaces consecutive beads more than one row apart, so rows appear with
-no bead at all — the chain reads as **broken strands**, which is worse than two
-beads touching. `TestTheRingHasNoBreaks` enforces this.
+Measured at 55 beads:
+
+| Shape | Ratio | Flat run | Empty rows | Pentagon |
+|---|---|---|---|---|
+| 18×9 | 2.00 | **6** | 0 | 0.0° |
+| 16×10 | 1.60 | 5 | 0 | 4.0° |
+| **15×10 (current)** | **1.50** | **5** | **0** | 7.6° |
+| 18×11 | 1.64 | 5 | **1** | 2.6° |
+
+Pentagon error is shown but is **not** a fault to minimise — see the superseded
+section above. Chasing it means keeping the ring a visual circle, which is the
+flattest shape there is.
+
+**Resist simply making the ring bigger.** It is the obvious response to beads that
+touch, and it trades four touching pairs for blank rows in the chain, which looks
+worse. `TestTheRingHasNoBreaks` enforces this.
 
 ### Shape
 
@@ -2016,9 +2186,9 @@ ringArc   = -2 * math.Pi   // a full turn, counter-clockwise
   the decade runs backwards.
 - **Starting position** is `ringStart`. `-π/2` is straight down, where the pendant
   hangs.
-- **Do not reopen a gap** in `ringArc` without expecting to lose the pentagon.
-  `TestTheBigBeadsFormAPentagon` will tell you: the five big beads only land 72°
-  apart because 55 slots divide evenly over a *full* turn.
+- **Do not reopen a gap** in `ringArc` without expecting to lose the even spacing.
+  `TestTheBigBeadsAreEvenlySpaced` will tell you: the big beads sit 11 slots apart
+  because 55 slots divide evenly over a *full* turn.
 
 ### If you change the geometry, check two things
 
@@ -2078,19 +2248,22 @@ Honest state of the prototype.
 
 ### 1. It needs a wide terminal
 
-**Measured:** the rosary plus its prayer panel renders **89 columns × 29 rows**,
-so an 80×24 terminal clips it. The ring itself is only 41×29.
+**Measured:** the rosary plus its prayer panel renders **83 columns × 34 rows**,
+so an 80×24 terminal clips it. The ring itself is 35×34.
 
-The closing screen is **41 × 32**: narrower, since the prayer panel is gone, but
-three rows *taller* — the ring, the closing words, and the keys set below them.
-Height is the binding constraint there, and `trimBlankRows` already reclaims four
-rows below the crucifix. `keysGap` is the one remaining knob; shortening it further
-means shortening the ring.
+The opening screen is **42 × 22** and the closing screen **35 × 38** — the closing
+one is the tallest thing here: the ring, the closing words, and the keys set below
+them. `trimBlankRows` already reclaims four rows below the crucifix, and `keysGap`
+is the one remaining knob; shortening further means shortening the ring.
+
+Note the ring grew *taller* and *narrower* when it was rounded (41×29 → 35×34):
+roundness buys curvature at the top and bottom by spending height. The width came
+back under 80, which is the half that was clipping.
 
 The width is simple arithmetic, not a bug:
 
 ```
-41 (ring)  +  4 (gutter)  +  44 (prayer panel)  =  89
+35 (ring)  +  4 (gutter)  +  44 (prayer panel)  =  83
 ```
 
 The panel is 44 because that is the longest prayer line in the rosary
@@ -2124,15 +2297,14 @@ close prayed, not a bug: merge them in `sequence.go` if a single bead is right.
 
 ### 3. Four pairs of beads touch, from cell rounding alone
 
-The spacing itself is even — ratio 1.01 in continuous space, and the five big beads
-land at exactly 72°. What remains is the grid: ideal spacing is **2.06 cells**, and
-a bead can only sit on a whole one, so some neighbours round to 1 apart and show as
-`●●`.
+The spacing itself is even in continuous space. What remains is the grid: a bead
+can only sit on a whole cell, so some neighbours round to one apart and show as
+`○○`.
 
 This is not fixable by better spacing maths, and **not** fixable by a bigger ring —
-see the table under "If you change the ring's size", where growing it trades these
-four touching pairs for blank rows in the chain, which looks worse. It would take
-either fewer beads or a finer grid than a terminal has.
+see the shape table above, where growing it trades these four touching pairs for
+blank rows in the chain, which looks worse. It would take either fewer beads or a
+finer grid than a terminal has.
 
 ### 4. `data/` has only three prayers
 
@@ -2150,7 +2322,9 @@ placeholders, not the full prayers. Swap each for `Say(...)` as it lands in
 1. `len(string)` is bytes, not columns. Use `lipgloss.Width`.
 2. Some glyphs are 2 cells wide. Measure before you design around one.
 3. Never put styled text in a grid cell — style after layout, never during.
-4. Cells are ~2:1 tall, so `rx ≈ 2 × ry` for a visual circle.
+4. Cells are ~2:1 tall, so `rx ≈ 2 × ry` draws a visual circle — which is NOT
+   always what you want: a circle is the flattest possible shape where it crosses
+   the vertical axis. See `ringWidth`.
 5. Screen y grows downward: use `cy - ry*sin(a)`.
 6. Cells are ~2:1 tall for **distance**, too. Any "how far apart do these look?"
    must scale dy — equal arc length on an ellipse is not equal visual spacing.

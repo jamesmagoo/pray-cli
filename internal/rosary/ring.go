@@ -99,6 +99,24 @@ func pendantRows() int {
 	return rows
 }
 
+// ringWidth is the horizontal radius for a given vertical one.
+//
+// NOT 2:1, which is what makes a visual circle (a cell is about twice as tall as
+// it is wide — see cellAspect). A true circle is the wrong shape here, because an
+// ellipse is FLATTEST where it crosses the vertical axis: at 2:1 the top and
+// bottom of the ring each held six beads in a straight horizontal line, which read
+// as a flat run rather than as a curve, while the sides curved properly.
+//
+// 3:2 is squatter than a circle and so curves harder top and bottom, which is
+// where the beads crowd. Measured at 55 beads, it is the roundest shape that
+// still keeps every bead on its own cell.
+//
+// Taller again curves more still, but then consecutive beads land more than a row
+// apart and the chain breaks into strands — the trade this sits between, and the
+// reason scripts/shapes.sh prints both numbers: the flat run and the empty rows.
+// See TestTheRingHasNoBreaks.
+func ringWidth(ry int) int { return ry * 3 / 2 }
+
 // centre returns the ring's centre for the given radii. Both the sizing check
 // and the drawing go through this, so they cannot drift apart: two independent
 // derivations of the centre is how a bead silently lands on a letter.
@@ -172,9 +190,8 @@ func layout(beads []Bead, textW, textH int) ringGeometry {
 	// if the ring is too SHORT — there will always be a bead on a text row. Each
 	// pass widens, and every few passes also heightens, so the ring escapes in
 	// whichever direction it is stuck.
-	// Grow outwards keeping a 2:1 ratio, because a terminal cell is about twice as
-	// tall as it is wide: rx = 2*ry is what reads as a CIRCLE rather than as a long
-	// hoop. (See ROSARY-TUI.md §1.)
+	// Grow outwards on a fixed ratio, so the ring keeps its shape while it sizes
+	// itself. ringRatio is what that shape is.
 	//
 	// With the mystery inside — a short label, not a prayer — the contents no longer
 	// constrain the ring much; its size is set almost entirely by the beads needing
@@ -182,12 +199,11 @@ func layout(beads []Bead, textW, textH int) ringGeometry {
 	// where growing rx faster than ry stretched it sideways.
 	ry := textH/2 + 2
 	for ; ry < 200; ry++ {
-		rx := ry * 2
-		if clears(rx, ry, n, textW, textH) && spacedOut(onRingSlots, rx, ry) {
+		if rx := ringWidth(ry); clears(rx, ry, n, textW, textH) && spacedOut(onRingSlots, rx, ry) {
 			break
 		}
 	}
-	rx := ry * 2
+	rx := ringWidth(ry)
 
 	g := ringGeometry{
 		rx: rx, ry: ry,
@@ -212,7 +228,20 @@ func layout(beads []Bead, textW, textH int) ringGeometry {
 	//
 	// rather than as one unbroken column of beads.
 	g.pos = make([][2]int, n)
+
+	// Drawn bottom-up from the crucifix, so the gap declared AFTER bead i is the
+	// blank row ABOVE it — between it and the bead nearer the ring.
+	//
+	// The topmost pendant bead therefore has to START one row lower than the ring's
+	// bottom bead, by however much gap is declared after it: the pendant hangs FROM
+	// the ring, so the separation between the two belongs here, not inside the loop
+	// where it would be decremented after the last bead and never used. It was, and
+	// the result was a bottom bead sitting directly on the pendant with no gap at
+	// all, however PendantGapAfter was written.
 	row := g.cy + g.ry + pendantRows() - 1
+	if PendantGapAfter(pendantLen - 1) {
+		row++
+	}
 	for i := 0; i < pendantLen && i < n; i++ {
 		g.pos[i] = [2]int{g.cx, row}
 		row--

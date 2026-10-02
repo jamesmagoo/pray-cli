@@ -128,11 +128,11 @@ func TestMysteryInsideRingPrayerToTheRight(t *testing.T) {
 
 	// Byte offsets would be wrong here too: rows contain multi-byte bead glyphs,
 	// so each match is converted to a display column.
-	mysteryCol, prayerCol := -1, -1
+	// The mystery's name may be wrapped onto two rows, so this looks for its first
+	// line rather than the whole string.
+	_, mysteryCol := mysteryRow(rows, Sorrowful.Mysteries[0])
+	prayerCol := -1
 	for _, row := range rows {
-		if i := strings.Index(row, Sorrowful.Mysteries[0]); i >= 0 {
-			mysteryCol = lipgloss.Width(row[:i])
-		}
 		if i := strings.Index(row, "full of grace"); i >= 0 {
 			prayerCol = lipgloss.Width(row[:i])
 		}
@@ -175,17 +175,24 @@ func TestMysteryIsCentredInTheRing(t *testing.T) {
 	lines := mysteryLines(m.set, m.announced())
 	out := drawRosary(m.ring, m.beads, m.cursor, 0, 0, lines)
 
+	// The name may be wrapped across rows; the first of its lines is what to find.
+	line := wrapMystery(Sorrowful.Mysteries[0])[0]
+
 	for _, row := range strings.Split(out, "\n") {
 		plain := stripEscapes(row)
-		i := strings.Index(plain, Sorrowful.Mysteries[0])
+		i := strings.Index(plain, line)
 		if i < 0 {
 			continue
 		}
 		// COLUMNS, not bytes: the row has bead glyphs before the text and each is
 		// three bytes. strings.Index gives a byte offset, so it must be converted
 		// with lipgloss.Width — the same trap as in overlay().
+		//
+		// Measured against the LINE found, not the whole mystery name: a long name
+		// is wrapped across rows, and each row is centred on its own, so the full
+		// name's width is not the width of anything on screen.
 		col := lipgloss.Width(plain[:i])
-		mid := col + lipgloss.Width(Sorrowful.Mysteries[0])/2
+		mid := col + lipgloss.Width(line)/2
 		if d := mid - m.ring.cx; d < -1 || d > 1 {
 			t.Errorf("the mystery's centre is %d columns from the ring's centre", d)
 		}
@@ -256,8 +263,9 @@ func TestMysteryIsStyled(t *testing.T) {
 
 	out := drawRosary(m.ring, m.beads, m.cursor, 0, 0, mysteryLines(m.set, m.announced()))
 
+	first := wrapMystery(Sorrowful.Mysteries[0])[0]
 	for _, row := range strings.Split(out, "\n") {
-		if !strings.Contains(stripEscapes(row), Sorrowful.Mysteries[0]) {
+		if !strings.Contains(stripEscapes(row), first) {
 			continue
 		}
 		if !strings.Contains(row, "\x1b[") {

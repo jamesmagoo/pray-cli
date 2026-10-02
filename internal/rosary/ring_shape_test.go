@@ -30,44 +30,77 @@ func bigBeadAngles(t *testing.T, m model) []float64 {
 	return out
 }
 
-// The five big beads form a pentagon: 72 degrees apart, all the way round.
+// The five big beads are evenly spaced around the ring, and symmetrically placed.
 //
-// Nothing arranges them. Each decade is eleven beads of fifty-five, so evenly
-// spacing fifty-five slots around a CLOSED loop puts every eleventh one at a fifth
-// of the circle. The pentagon is a consequence of the loop being closed and the
-// spacing being even — which is why this test is the one that would catch either
-// of those being undone.
-func TestTheBigBeadsFormAPentagon(t *testing.T) {
+// Spacing is measured along the CHAIN — the distance round the ring from one big
+// bead to the next — not by angle. Angle was the original measure, because at a
+// 2:1 ring (a visual circle) even spacing put the five at exactly 72 degrees and
+// a pentagon fell out of the arithmetic. That pentagon was a property of the
+// construction, not of the design: at any other ratio the ellipse's angles stop
+// corresponding to distance travelled, and insisting on 72 degrees would mean
+// insisting the ring stay a circle. The ring's ROUNDNESS matters more (see
+// ringWidth), so the test measures what is actually wanted.
+func TestTheBigBeadsAreEvenlySpaced(t *testing.T) {
 	m := praying(t)
 
-	angles := bigBeadAngles(t, m)
-	if len(angles) != 5 {
-		t.Fatalf("found %d big beads on the ring, want 5", len(angles))
+	// Where each big bead falls in the run of ring beads.
+	var at []int
+	slot := 0
+	for i := pendantLen; i < len(m.beads); i++ {
+		if m.beads[i].SameAs > 0 {
+			continue // drawn on another bead; takes no place of its own
+		}
+		if m.beads[i].Kind == Large {
+			at = append(at, slot)
+		}
+		slot++
+	}
+	if len(at) != 5 {
+		t.Fatalf("found %d big beads on the ring, want 5", len(at))
+	}
+	if at[0] != 0 {
+		t.Errorf("the first big bead is at slot %d, want 0 — the bottom of the loop, "+
+			"where the pendant hangs", at[0])
 	}
 
-	// The first sits at the bottom, where the pendant hangs.
-	if got := angles[0]; math.Abs(got-(-90)) > 0.001 {
-		t.Errorf("the first big bead is at %.2f°, want -90° (straight down)", got)
+	// Eleven slots between each and the next, the fifth wrapping back to the first.
+	// Eleven because a decade is one big bead and ten Hail Marys, so this is the
+	// sequence and the ring agreeing with each other.
+	for i := range at {
+		next := at[(i+1)%len(at)]
+		step := next - at[i]
+		if step <= 0 {
+			step += slot // wrapped round the loop
+		}
+		if step != 11 {
+			t.Errorf("big beads %d to %d are %d slots apart, want 11", i, (i+1)%len(at), step)
+		}
+	}
+}
+
+// The ring is symmetric about its vertical axis.
+//
+// This is the property the eye actually reads, and the one that survives a change
+// of ratio: whatever shape the ring is, its left half must mirror its right. A
+// bead off by a column on one side only is the kind of fault that looks like a
+// mistake rather than a style.
+func TestTheRingIsSymmetric(t *testing.T) {
+	m := praying(t)
+	g := m.ring
+
+	// Every occupied cell, mirrored about the centre column, must also be occupied.
+	occupied := map[[2]int]bool{}
+	for i := pendantLen; i < len(m.beads); i++ {
+		if m.beads[i].SameAs == 0 {
+			occupied[g.pos[i]] = true
+		}
 	}
 
-	// Each step round the loop is 72 degrees, the fifth back to the first included.
-	//
-	// The step is taken modulo a full turn: angles are reported in (-360, 0], so
-	// walking past -360 wraps to near 0 and a plain subtraction would read as -288
-	// rather than 72. Normalising here is what makes the fifth gap comparable to
-	// the other four instead of needing a special case.
-	//
-	// The tolerance is for cell rounding only: the maths is exact (see
-	// TestTheSpacingMathsIsExact), but a bead can only sit on a whole cell, and at
-	// rx=18 that is worth up to about 1.5 degrees.
-	const tolerance = 5.0
-	for i := range angles {
-		from := angles[i]
-		to := angles[(i+1)%len(angles)]
-		step := math.Mod(from-to+360, 360)
-		if math.Abs(step-72) > tolerance {
-			t.Errorf("big beads %d to %d span %.2f°, want 72° (±%.0f)",
-				i, (i+1)%len(angles), step, tolerance)
+	for cell := range occupied {
+		mirror := [2]int{2*g.cx - cell[0], cell[1]}
+		if !occupied[mirror] {
+			t.Errorf("a bead at %v has nothing at its mirror %v; the ring is lopsided",
+				cell, mirror)
 		}
 	}
 }
