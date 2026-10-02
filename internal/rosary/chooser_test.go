@@ -291,3 +291,56 @@ func TestTheDaysLineIsACaptionUnderTheList(t *testing.T) {
 		t.Error("the days line carries the selection marker; it is not a choice")
 	}
 }
+
+// A rule divides the title from the list of sets.
+//
+// Between them, not merely present: the whole job of the divider is to say the
+// heading and the list are different things, which it only does from that one
+// position.
+func TestARuleDividesTheTitleFromTheList(t *testing.T) {
+	m := mustModel(t)
+	rows := strings.Split(plain(chooser(m)), "\n")
+
+	title, rule, firstSet := -1, -1, -1
+	for i, r := range rows {
+		if strings.Contains(r, rosaryTitle) {
+			title = i
+		}
+		if strings.Contains(r, chooserDivider) {
+			rule = i
+		}
+		if firstSet < 0 && strings.Contains(r, Sets()[0].Name) {
+			firstSet = i
+		}
+	}
+	if rule < 0 {
+		t.Fatalf("no divider on the opening screen:\n%s", strings.Join(rows, "\n"))
+	}
+	if title < 0 || firstSet < 0 {
+		t.Fatalf("title at %d, first set at %d; expected both", title, firstSet)
+	}
+	if rule <= title {
+		t.Error("the divider is above the title; it belongs between title and list")
+	}
+	if rule >= firstSet {
+		t.Error("the divider is below the first set; it belongs between title and list")
+	}
+
+	// It FLOATS: clearly shorter than the content it divides, so it reads as a mark
+	// between two parts of one screen rather than as a line splitting two panels.
+	//
+	// Measured against the list, not the box: the box's width includes the padding,
+	// which would let the rule grow to nearly the full inner width and still pass.
+	// Two thirds of the widest line is the bound — the current rule is 14 cells
+	// against a 26-cell list, so there is room to retune without tripping it.
+	widest := 0
+	for _, set := range Sets() {
+		if w := lipgloss.Width(set.Name) + 3; w > widest {
+			widest = w
+		}
+	}
+	if w := lipgloss.Width(chooserDivider); w*3 > widest*2 {
+		t.Errorf("the divider is %d cells against a %d-cell list; it should be short "+
+			"enough to float rather than span", w, widest)
+	}
+}

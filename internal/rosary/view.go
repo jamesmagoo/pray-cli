@@ -466,9 +466,21 @@ func chooser(m model) string {
 	return boxStyle.Render(lipgloss.JoinVertical(lipgloss.Left,
 		centred.Render(head),
 		"",
+		centred.Render(dividerStyle.Render(chooserDivider)),
+		"",
 		lipgloss.NewStyle().Width(w).Render(body),
 	))
 }
+
+// chooserDivider separates the title from the list of sets.
+//
+// Short and centred rather than spanning the box: a full-width rule cuts the
+// screen in two, and the two halves are not equals — the title is a heading and
+// the list is the thing you came to use. This marks the break without claiming
+// they are separate panels.
+//
+// The tapered ends (╶ ╴) are what keep it from reading as a truncated full rule.
+const chooserDivider = "╶────────────╴"
 
 // chooserHeading is the crucifix over the rosary's full name.
 //
@@ -551,10 +563,13 @@ func beadStyle(k Kind, current bool, glow int) lipgloss.Style {
 
 // Styles for the mystery box and the chooser.
 var (
+	// Padding(vertical, horizontal). The vertical 1 is the half that was missing:
+	// at 0 the border sat directly on the crown of the cross and on the keys, which
+	// is what made the box feel tight however wide it was.
 	boxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(gold).
-			Padding(0, 3)
+			Padding(1, 6)
 
 	// The set's name is secondary to the mystery itself, so it is quieter.
 	setNameStyle = lipgloss.NewStyle().Foreground(gold).Faint(true)
@@ -570,6 +585,10 @@ var (
 	// When a set is traditionally prayed. Faint: it is guidance, and should be
 	// available to the eye without asking for it — the choice is still the user's.
 	daysStyle = lipgloss.NewStyle().Foreground(beadBlue).Faint(true)
+
+	// The rule under the title: gold like the frame it sits inside, and faint, so
+	// it divides without competing with either the title or the list.
+	dividerStyle = lipgloss.NewStyle().Foreground(gold).Faint(true)
 
 	mysteryStyle = lipgloss.NewStyle().Foreground(currentRest).Bold(true)
 
