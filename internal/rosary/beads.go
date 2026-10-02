@@ -46,6 +46,7 @@ const (
 // Candidates, big / small (all same-class pairs):
 //
 //	"●" "○"   filled / hollow         — the default: strongest contrast
+//	"●" "•"   filled / bullet         — both solid, differing in size
 //	"◆" "◇"   filled / hollow diamond
 //	"⭘" "○"   heavy ring / hollow     — more delicate
 //	"●" "·"   filled / middle dot     — smalls recede to a thread

@@ -15,6 +15,22 @@ import (
 // there for the intention line and arrives with it.
 var gold = lipgloss.Color("#C9A227")
 
+// beadBlue is the small beads — the Hail Marys and the pendant's chain.
+//
+// The only colour in the rosary that is not gold. The smalls are most of the ring
+// (50 of 55 beads), so colouring them apart from the five big ones separates the
+// decades from their junctions by hue rather than by size alone, which the two
+// circle glyphs do only quietly.
+//
+// Cornflower: deep enough to sit under the gold without competing, now that the
+// smalls are drawn at full strength rather than Faint. Lavender (#8FA9D0) was
+// tried and read washed out once undimmed.
+//
+// Everything else stays gold: the big beads, the crucifix, the mystery, the
+// chooser and the hints. This is deliberately a two-colour palette and not a
+// theme — see beadDim, the one style that uses this.
+var beadBlue = lipgloss.Color("#5B8DD6")
+
 // currentRest is the colour the bead under the cursor sits at between moves:
 // brighter than the ring so the eye finds it at a glance.
 var currentRest = lipgloss.Lighten(gold, 0.35)
@@ -394,11 +410,16 @@ func hint() string {
 	return "space next   ← back   x finish"
 }
 
-// Bead colours. The ring is gold; the bead being prayed is reversed so it reads
-// as "you are here" even with colour off (NO_COLOR), which a foreground change
-// alone would not survive.
+// Bead colours. The big beads and the crucifix are gold, the small beads blue;
+// the bead being prayed is brighter and bold so it reads as "you are here" even
+// with colour off (NO_COLOR), which a foreground change alone would not survive.
 var (
-	beadDim   = lipgloss.NewStyle().Foreground(gold).Faint(true)
+	// The small beads, and the only non-gold thing on the ring.
+	//
+	// NOT Faint. Faint dims whatever colour it is given, which muddied the blue —
+	// the hue was being chosen and then half thrown away. The smalls still recede
+	// behind the big beads, by hue and by the hollow glyph rather than by dimming.
+	beadDim   = lipgloss.NewStyle().Foreground(beadBlue)
 	beadLarge = lipgloss.NewStyle().Foreground(gold)
 	// The resting current bead: bright and bold, but no Reverse — see glowStyle.
 	// currentRest is named separately because glowRamp must END on exactly this
