@@ -262,6 +262,14 @@ func eastAsianWidthClass(glyph string) string {
 		c == 0x2022,                // •
 		c == 0x2B58:                // ⭘
 		return "A"
+	// Box drawing (U+2500-257F) is class A throughout: it is what the crucifix is
+	// built from, and the reason it lines up with the pendant whatever the font
+	// does.
+	case c >= 0x2500 && c <= 0x257F:
+		return "A"
+	// Block elements, which are class A EXCEPT for a few — listed as N below.
+	case c >= 0x2580 && c <= 0x258F, c == 0x2592, c == 0x2593, c == 0x2594, c == 0x2595:
+		return "A"
 	// Class N (neutral): the oversized shapes that cause the trouble.
 	case c == 0x2B24, // ⬤ BLACK LARGE CIRCLE
 		c == 0x2B22, c == 0x2B23, // ⬢ ⬣
@@ -270,7 +278,10 @@ func eastAsianWidthClass(glyph string) string {
 		c == 0x25E6,              // ◦
 		c == 0x2720,              // ✠ MALTESE CROSS
 		c == 0x2739, c == 0x273B, // ✹ ✻
-		c == 0x29BF: // ⦿
+		c == 0x2590,                // ▐ RIGHT HALF BLOCK — the odd one out of the block elements
+		c == 0x2591,                // ░ LIGHT SHADE
+		c >= 0x2596 && c <= 0x259F, // the quadrant blocks
+		c == 0x29BF:                // ⦿
 		return "N"
 	}
 	return "?"
@@ -324,6 +335,52 @@ func TestTheCrucifixIsCentredOnThePendant(t *testing.T) {
 	if left, right := g.cx-minX, maxX-g.cx; left != right {
 		t.Errorf("the crucifix reaches %d cells left of centre and %d right; it is lopsided",
 			left, right)
+	}
+}
+
+// Every character of the crucifix is East Asian Width class A, like the beads.
+//
+// This is the rule the whole of cross.go exists to satisfy, so it is worth
+// asserting directly rather than trusting the art to stay correct. The trap is
+// live: the block-element range is mostly class A, but "▐" RIGHT HALF BLOCK is
+// class N, and reaching for it to taper an arm would quietly reintroduce the drift
+// the lines were adopted to remove.
+func TestTheCrucifixIsBuiltFromClassAGlyphs(t *testing.T) {
+	for y, line := range crossArt {
+		for x, r := range line {
+			if r == ' ' {
+				continue
+			}
+			if class := eastAsianWidthClass(string(r)); class != "A" {
+				t.Errorf("crossArt[%d] column %d is %q, width class %s; want A — "+
+					"a class-N glyph may be painted wider than its cell and push the "+
+					"cross off the pendant's column", y, x, string(r), class)
+			}
+		}
+	}
+}
+
+// The art has a true centre column, and it is the stem.
+//
+// crossOrigin centres the cross by halving its width, so an even width has no
+// middle cell to put on the pendant's column — the whole cross would sit half a
+// cell off, which is the fault this file was written to cure.
+func TestTheCrucifixArtHasACentreColumn(t *testing.T) {
+	w := crossW()
+	if w%2 == 0 {
+		t.Fatalf("crossArt is %d cells wide; an even width has no centre column", w)
+	}
+	for y, line := range crossArt {
+		if got := len([]rune(line)); got != w {
+			t.Errorf("crossArt[%d] is %d cells wide, want %d; the rows must be a rectangle",
+				y, got, w)
+		}
+	}
+	// And the centre column is the stem: something on every row.
+	for y, line := range crossArt {
+		if r := []rune(line)[w/2]; r == ' ' {
+			t.Errorf("crossArt[%d] has a gap in its centre column; the stem must be unbroken", y)
+		}
 	}
 }
 

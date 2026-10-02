@@ -1861,15 +1861,25 @@ So the rosary's crucifix is **assembled from box-drawing characters**, which are
 class A throughout and are designed to join across cell boundaries:
 
 ```
-  ┃
-━━╋━━
-  ┃
-  ┃
+  ║
+══╬══
+  ║
+  ║
 ```
 
 It lines up with the pendant exactly, and no font can push it off — see
 `cross.go`, where the art is declared once and the grid write, the colour pass,
-the canvas height and the collision check all derive from it.
+the canvas height and the collision check all derive from it. Changing the cross
+means changing those four strings and nothing else; heavy single lines (`━━╋━━`)
+and full block (`█████`) are both in the comment there.
+
+**Not every block character is safe.** Box drawing (U+2500–257F) is class A
+throughout, and most block elements are — but `▐` RIGHT HALF BLOCK is class **N**,
+and reaching for it to taper an arm would quietly reintroduce the drift the lines
+were adopted to remove. `TestTheCrucifixIsBuiltFromClassAGlyphs` checks every
+character of the art; `TestTheCrucifixArtHasACentreColumn` checks the art is a
+rectangle of odd width with an unbroken stem, since `crossOrigin` centres it by
+halving that width.
 
 **The cost, which is real.** The crucifix is no longer one cell, and three things
 had to follow:

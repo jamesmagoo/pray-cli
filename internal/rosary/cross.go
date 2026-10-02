@@ -21,17 +21,22 @@ package rosary
 // It must have an odd width so it has a true centre column, and that column must
 // be the stem: crossOrigin centres it on the pendant by that column alone.
 //
+// Every character used here must be East Asian Width class A, like the beads —
+// that is the whole point. The box-drawing block (U+2500–257F) and most of the
+// block elements are, but NOT all of them: "▐" RIGHT HALF BLOCK is class N and
+// would reintroduce exactly the drift this file exists to remove.
+//
 // Alternatives that also work, if this one ever wants replacing:
 //
-//	light:      │      arms high:    ┃
-//	         ──┼──                   ┃
-//	           │                  ━━╋━━
-//	           │                    ┃
+//	heavy line:   ┃     solid:    █      arms high:   ║
+//	            ━━╋━━          █████                  ║
+//	              ┃              █                  ══╬══
+//	              ┃              █                    ║
 var crossArt = []string{
-	"  ┃  ",
-	"━━╋━━",
-	"  ┃  ",
-	"  ┃  ",
+	"  ║  ",
+	"══╬══",
+	"  ║  ",
+	"  ║  ",
 }
 
 // crossW and crossH are the crucifix's size in cells.
