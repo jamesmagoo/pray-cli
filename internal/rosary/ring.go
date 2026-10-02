@@ -366,6 +366,12 @@ func drawRosary(g ringGeometry, beads []Bead, cursor, glow, fade int, lines []st
 
 	c := newCanvas(g.w, g.h)
 
+	// cursor may be out of range deliberately: the closing screen passes -1 to draw
+	// the ring with NO bead current, every bead at rest. Resolving that here rather
+	// than at each use keeps the three cursor tests below from each needing a bounds
+	// check, and means g.pos[cursor] is only ever indexed when there is a cursor.
+	onBead := cursor >= 0 && cursor < len(beads)
+
 	// The ring. The bead at the cursor is drawn as a halo rather than as its own
 	// kind of bead, so the eye finds it by shape and not only by colour.
 	for i, b := range beads {
@@ -373,7 +379,10 @@ func drawRosary(g ringGeometry, beads []Bead, cursor, glow, fade int, lines []st
 		// the bead it began on. Whichever is drawn LAST would win, so the one that
 		// is not current yields: otherwise standing on the first of them would see
 		// its halo overwritten by the second's plain glyph.
-		if i != cursor && g.pos[i] == g.pos[cursor] {
+		//
+		// With no cursor neither yields; they draw the same resting glyph in the
+		// same cell, so the result is identical either way.
+		if onBead && i != cursor && g.pos[i] == g.pos[cursor] {
 			continue
 		}
 
@@ -382,7 +391,7 @@ func drawRosary(g ringGeometry, beads []Bead, cursor, glow, fade int, lines []st
 		// carries meaning, and swapping it for a bead would make the cross vanish
 		// exactly when you are praying the Sign of the Cross on it. The cross
 		// shows selection by colour and weight instead.
-		if i == cursor && b.Kind != Cross {
+		if onBead && i == cursor && b.Kind != Cross {
 			glyph = currentGlyph(glow)
 		}
 		c.set(g.pos[i][0], g.pos[i][1], []rune(glyph)[0])

@@ -13,10 +13,15 @@ import (
 // without a terminal: build a state, send it a message, look at what comes back.
 // That is the practical payoff of keeping all state in one value.
 
-func TestFinishKeys(t *testing.T) {
+// esc and ctrl+c quit immediately, with no farewell.
+//
+// They are escape hatches: someone reaching for either wants out of a full-screen
+// program NOW. x is the considered exit and is tested separately — it starts the
+// farewell instead of quitting, which is the whole distinction.
+func TestEscapeHatchesQuitImmediately(t *testing.T) {
 	m := praying(t)
 
-	for _, key := range []string{"x", "esc", "ctrl+c"} {
+	for _, key := range []string{"esc", "ctrl+c"} {
 		t.Run(key, func(t *testing.T) {
 			// tea.Key is what the runtime builds from a real key press; here we
 			// build one directly. Code is the rune or special key pressed.

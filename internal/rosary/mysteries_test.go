@@ -142,7 +142,7 @@ func TestChooserRunsFirstAndSpaceBegins(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !m.choosing {
+	if m.phase != choosing {
 		t.Fatal("the rosary did not open on the chooser")
 	}
 	if !strings.Contains(render(m), Sorrowful.Name) {
@@ -152,8 +152,8 @@ func TestChooserRunsFirstAndSpaceBegins(t *testing.T) {
 	next, _ := m.Update(tea.KeyPressMsg{Code: ' '})
 	got := next.(model)
 
-	if got.choosing {
-		t.Error("space did not leave the chooser")
+	if got.phase != atPrayer {
+		t.Error("space did not leave the chooser for the rosary")
 	}
 	if got.set.Name != Sorrowful.Name {
 		t.Errorf("began with %q, want %q", got.set.Name, Sorrowful.Name)
@@ -169,7 +169,7 @@ func TestPrayingKeysAreInertWhileChoosing(t *testing.T) {
 	m, _ := newModel("en", Sorrowful)
 
 	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
-	if got := next.(model); got.cursor != 0 || !got.choosing {
+	if got := next.(model); got.cursor != 0 || got.phase != choosing {
 		t.Error("an arrow key moved the rosary while the chooser was up")
 	}
 }

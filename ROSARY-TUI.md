@@ -49,17 +49,34 @@ It is a recipe per question, with the constraints that will bite you.
 | Gap / direction | `ring.go` | `gapStart`, `gapArc` |
 | Step indicator | `animate.go` | `glowFrames`, `bloom`, `glowRamp` |
 | Fade-in speed | `animate.go` | `fadeFrames`, `frameRate` |
+| Fade-out on exit | `animate.go` | `departFrames`, `departRamp` |
+| Farewell words | `view.go` | `farewellWords` |
 | Keys | `model.go` | the `tea.KeyPressMsg` switch in `Update` |
 
 ### The keys
 
+While praying:
+
 | Key | Does |
 |---|---|
-| `space` (or `enter`, `→`, `l`) | next prayer; at a bead's last prayer, the next bead |
+| `space` (or `enter`, `→`, `l`) | next prayer; at a bead's last prayer, the next bead; on the **last** prayer, finishes |
 | `←` (or `h`, `backspace`) | back one prayer |
-| `x` (or `esc`, `ctrl+c`) | finish |
+| `x` | finish — fades out, then quits |
+| `esc`, `ctrl+c` | quit immediately, no farewell |
 
-On the chooser screen, `↑`/`↓` pick the mysteries and `space` begins.
+On the chooser: `↑`/`↓` pick the mysteries, `space` begins.
+
+On the closing screen: `space` prays again (back to the chooser), `←` steps back
+into the rosary, `x` leaves.
+
+`x` is the considered exit and gets the farewell; `esc` and `ctrl+c` are escape
+hatches and skip it. Someone reaching for either wants out *now*, and a hatch that
+takes 1.2 seconds to open is not one.
+
+Note that `space` means "go on" on all three screens — the chooser begins, the
+rosary advances, the close starts another. That is deliberate: it is the key the
+thumb finds without looking, and the one moment not to require a new gesture is
+the end.
 
 **Space is `"space"`, not `" "`.** See Part I §6 — matching the wrong one fails
 silently.
@@ -428,8 +445,9 @@ every position and visibly distorts the shape. `int(math.Round(x))` is correct.
 | `ring.go` | *Geometry*: where each bead goes; places plain runes on a grid |
 | `style_grid.go` | *Colour*: second pass, adds escapes to the finished grid |
 | `view.go` | *Content*: the mystery inside the ring, the prayer panel beside it, colours |
-| `animate.go` | *Time*: the bead's flare and the prayer's fade-in |
+| `animate.go` | *Time*: the bead's flare, the prayer's fade-in, the farewell's fade-out |
 | `model.go` | *State and the loop*: the Bubble Tea `Model` |
+| `phase.go` | Which of the three screens is showing: chooser, rosary, close |
 | `run.go` | Entry point; the only thing `internal/cli` touches |
 
 The ordering is deliberate: structure → geometry → colour. Each layer depends
@@ -672,22 +690,188 @@ being contemplated.
 (The chooser still uses a box — it is a panel on an otherwise empty screen, with
 no ring to conflict with.)
 
-### The chooser is a phase, not a program
+### Three screens, one program
 
-The user picks a set before praying. That is a field on the same model:
+The chooser, the rosary and the close are all *phases of the same model* — not
+separate programs, not separate Bubble Tea instances:
 
 ```go
-choosing bool
-choice   int
+type phase int
+
+const (
+	choosing phase = iota
+	atPrayer
+	finished
+	departing
+)
 ```
 
-`Update` handles the chooser's keys and returns early, so the two phases share no
-key logic — important because space means "choose" on one screen and "next
-prayer" on the other. The rosary is already built behind the chooser, so starting
-is instant.
+`Update` switches on it and each phase gets its own key handler, returning early,
+so the phases share no key logic. That matters because `space` means something
+different on each screen, and one switch trying to serve all three is how a key
+ends up meaning two things at once.
+
+**Why a `phase` and not two booleans.** The first version had `choosing bool`.
+Adding the close would make it `choosing bool, done bool` — four states, one of
+which (`choosing && done`) is nonsense, and every handler would have to check both
+in the right order. One `phase` has exactly the three states that exist, so the
+impossible screen cannot be represented.
+
+The rosary is built once, behind the chooser, so beginning is instant — and
+*beginning again* needs no reload at all:
+
+```go
+func (m *model) begin(set MysterySet) tea.Cmd {
+	m.set = set
+	m.cursor = 0
+	m.say = 0
+	m.phase = atPrayer
+	return m.startStep()
+}
+```
+
+Note what it does **not** reset: `beads`, `ring`, `panelW`. Those are the rosary
+as a physical object, measured once in `newModel` — the same on the second time
+through as on the first.
+
+Resetting the cursor is not cosmetic. `announced()` finds the current mystery by
+looking **back** from the cursor, so a stale cursor would carry the fifth mystery
+into the new rosary's opening prayers. `TestBeginResetsTheRosary` calls `begin`
+directly for exactly this reason: going through the chooser hides the bug, because
+the chooser resets the cursor itself.
 
 Adding Joyful and Glorious needs no new code: write them in `mysteries.go`, add
 them to `Sets()`, and the chooser lists them.
+
+### The close: the transition is an absence
+
+Reaching the last prayer used to do nothing — `next()` returned false and the key
+was swallowed, leaving the user on the Hail Holy Queen with no sign they had
+finished. Now `space` there moves to the `finished` phase.
+
+The closing screen draws **the same ring, with no bead current**:
+
+```go
+ring := drawRosary(m.ring, m.beads, -1, 0, 0, finishedLines())
+```
+
+`cursor = -1` is what lifts the cursor off: no bead index can equal it, so no halo
+is drawn and every bead sits in its resting colour. Through the whole rosary
+exactly one bead was lit, so a ring with *nothing* lit reads immediately as "no
+longer in progress" — the same object, at rest. That is the whole transition, and
+it needs no second drawing path that could drift out of agreement with the ring
+just prayed.
+
+`drawRosary` needed one guard for this, since it indexed `g.pos[cursor]` to resolve
+beads sharing a cell:
+
+```go
+onBead := cursor >= 0 && cursor < len(beads)
+```
+
+The mystery is cleared from the middle of the ring and replaced with `Amen.` —
+leaving the fifth mystery there would read as still being on it.
+
+The closing screen also animates in using the same counters, so arriving at the
+end feels like one more step rather than a different program taking over.
+
+### The farewell: an animation that must outlive its own trigger
+
+`x` does not quit. It starts a fade-out, and the program quits itself when the
+fade reaches black.
+
+This is the one animation here whose **end does something** rather than merely
+stopping, and that makes it structurally different from the other three. Bubble
+Tea has no "quit when this is done" command — `tea.Quit` tears the program down on
+the spot — so leaving has to be a *phase*:
+
+```go
+func (m *model) leave() tea.Cmd {
+	m.phase = departing
+	m.depart = departFrames
+	return tick()
+}
+```
+
+and the frame handler ends it:
+
+```go
+if m.phase == departing {
+	m.depart--
+	if m.depart <= 0 {
+		return m, tea.Quit   // the last frame
+	}
+	return m, tick()
+}
+```
+
+**The question that had to be answered first:** does the runtime call `View` for
+the frame whose `Update` returns `tea.Quit`? If not, the fade would be cut off one
+frame early and the last thing on screen would be a half-faded word. I probed it
+with a throwaway program that logged every `View` call:
+
+```
+VIEW CALLED n=4
+VIEW CALLED n=5
+VIEW CALLED n=6   ← the frame that returned tea.Quit
+program returned cleanly
+```
+
+It does. Worth knowing in general: **a self-quitting animation's final frame is
+drawn.**
+
+Note the `departing` case sits *above* the shared counter logic and returns early.
+It must not fall through to the "stop if nothing is running" test, which would
+leave the phase stuck with nothing re-arming the timer.
+
+**The fade runs the other way.** `fadeStyle` starts dim and arrives; this one
+starts lit and leaves:
+
+```go
+var departRamp = lipgloss.Blend1D(departFrames, textRest, lipgloss.Color("#000000"))
+```
+
+Blended to black for the same reason `textRamp` blends up from `#1C1C1C` — a
+terminal has no transparency, so a fade is always an explicit blend between two
+opaque colours (Part I §7). On a light terminal the words darken rather than
+dissolve; still a fade, just not the same one.
+
+**What the screen shows:** the cross and three words, and nothing else. The ring,
+the prayers, the mystery and the keys are all gone, so the fade has one thing to
+carry and the screen empties as it dims. A farewell that still had the rosary on it
+would be the rosary dimming; this is the rosary already put down.
+
+`rampAt` exists because every one of these animations needs the same clamp, and
+writing it out at each use is how one of them ends up missing it and panicking on
+the frame where a duration was retuned but a ramp was not.
+
+**Three blocks, not one.** The ring, the closing words and the keys are joined as
+separate blocks, because they are three different kinds of thing and the gaps
+between them are what says so — the keys are chrome and should not read as part of
+the closing words. `keysGap` sets that distance:
+
+```go
+strings.Repeat("\n", keysGap-1),
+```
+
+The `-1` is not a fudge: a block of n newlines is n+1 lines, and `JoinVertical`
+adds its own separator, so the repeat has to be one short of the gap you want.
+Off by one here is a visible row. `TestKeysSitBelowTheClosingWords` pins the rows
+actually produced and fails in both directions.
+
+**Two rows reclaimed.** The ring's canvas is as tall as the geometry reserved, and
+the rows below the crucifix are blank — invisible while the prayer sits *beside*
+the ring, but a four-row gap between the crucifix and the closing text. The fix is
+`trimBlankRows`, and it carries a trap worth knowing:
+
+```go
+// WRONG: the canvas pads every row to the full ring width,
+// so a "blank" row is 41 spaces and this trims nothing.
+for lipgloss.Width(rows[len(rows)-1]) == 0 { ... }
+```
+
+A row is blank when it holds nothing but **spaces**, not when its width is zero.
+This was written the wrong way first and silently did nothing.
 
 ## Chrome belongs outside the layout
 
@@ -1134,6 +1318,39 @@ $ # (temporarily remove the block-padding line)
 
 A test that cannot fail is worse than no test, because it buys false
 confidence.
+
+> ### Trap: `strings.Contains` cannot find text drawn on the grid
+>
+> `styleGrid` wraps **each rune in its own escape sequence**. A line reading
+> `The Crucifixion` on screen is really:
+>
+> ```
+> \x1b[1;38;2;...mT\x1b[m\x1b[1;38;2;...mh\x1b[m\x1b[1;38;2;...me\x1b[m ...
+> ```
+>
+> so `strings.Contains(screen, "The Crucifixion")` is **always false**. Text in
+> the prayer *panel* is findable, because that is styled a whole line at a time —
+> and that is precisely the trap: the same assertion works for panel text and
+> passes vacuously for grid text.
+>
+> This cost a vacuous assertion here. `TestFinishScreenOffersAgainAndFinish`
+> checked that the last mystery was no longer shown, and passed even when the
+> mystery was deliberately put back. The fix is a `plain()` helper that strips the
+> escapes before matching.
+>
+> Same family as the byte-offset trap above, and the same lesson: **once escapes
+> are in a string, it is no longer the text you think you are searching.**
+
+> ### Trap: a test that goes through the UI can hide the bug
+>
+> `TestBeginningAgainClearsTheMystery` presses space through the chooser and
+> checks the new rosary has no mystery. It passed even with `begin()`'s cursor
+> reset deleted — because the chooser resets the cursor itself, so `begin()`'s own
+> reset was never exercised.
+>
+> The fix was `TestBeginResetsTheRosary`, which calls `begin()` **directly**. When
+> a test drives a path through several steps, ask which step is actually under
+> test — and whether an earlier one is quietly doing its job for it.
 
 ---
 
@@ -1714,6 +1931,12 @@ Honest state of the prototype.
 
 **Measured:** the rosary plus its prayer panel renders **89 columns × 29 rows**,
 so an 80×24 terminal clips it. The ring itself is only 41×29.
+
+The closing screen is **41 × 32**: narrower, since the prayer panel is gone, but
+three rows *taller* — the ring, the closing words, and the keys set below them.
+Height is the binding constraint there, and `trimBlankRows` already reclaims four
+rows below the crucifix. `keysGap` is the one remaining knob; shortening it further
+means shortening the ring.
 
 The width is simple arithmetic, not a bug:
 

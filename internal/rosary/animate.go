@@ -1,6 +1,7 @@
 package rosary
 
 import (
+	"image/color"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -163,4 +164,66 @@ func fadeStyle(fade int) lipgloss.Style {
 		i = len(textRamp) - 1
 	}
 	return lipgloss.NewStyle().Foreground(textRamp[i])
+}
+
+// ── The farewell's fade-out ──────────────────────────────────────────────────
+//
+// Leaving is the one animation that must finish before the program ends, and
+// Bubble Tea has no "quit when this is done" command: tea.Quit tears the program
+// down on the spot. So the fade-out is a phase (see phase.go) that animates and
+// returns tea.Quit on its own last frame.
+//
+// This was verified against the runtime rather than assumed: View IS called for
+// the frame whose Update returns tea.Quit, so the final frame is drawn before
+// teardown. If it were not, the farewell would end one frame early and the last
+// thing on screen would be a half-faded word.
+
+// departFrames is how long the farewell takes. 24 x 50ms = 1.2s — slower than the
+// prayer's fade-in, because this one is the last thing seen and hurrying it would
+// undo the point of having it.
+const departFrames = 24
+
+// departRamp is the colours the farewell passes through: from the resting text
+// colour down to black, so the words sink into the terminal rather than being
+// switched off.
+//
+// Blended to #000000 for the same reason textRamp blends UP from #1C1C1C: a
+// terminal has no transparency (lipgloss.Alpha is dropped from the escape
+// sequence entirely), so a fade has to be an explicit blend between two opaque
+// colours. Black is the assumption a dark terminal makes true; on a light terminal
+// the words darken instead of lightening, which still reads as a fade, just not as
+// a dissolve.
+var departRamp = lipgloss.Blend1D(departFrames, textRest, lipgloss.Color("#000000"))
+
+// departGoldRamp is the same fade for the cross, which starts from gold rather
+// than from the text colour so it keeps its own character on the way out.
+var departGoldRamp = lipgloss.Blend1D(departFrames, currentRest, lipgloss.Color("#000000"))
+
+// departStyle is the farewell's text at this point in the fade-out.
+//
+// depart counts DOWN from departFrames to 0, and the ramp runs bright to dark, so
+// the index is departFrames-depart: the opposite direction from fadeStyle, which
+// starts dim and arrives. This one starts lit and leaves.
+func departStyle(depart int) lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(rampAt(departRamp, departFrames-depart))
+}
+
+// departCrossStyle is the cross's colour at this point in the fade-out.
+func departCrossStyle(depart int) lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(rampAt(departGoldRamp, departFrames-depart)).Bold(true)
+}
+
+// rampAt reads a ramp at index i, clamped to its ends.
+//
+// Every animation here needs this clamp, and writing it out at each use is how one
+// of them ends up missing it and panicking on the frame where a duration was
+// retuned but a ramp was not.
+func rampAt(ramp []color.Color, i int) color.Color {
+	if i < 0 {
+		return ramp[0]
+	}
+	if i >= len(ramp) {
+		return ramp[len(ramp)-1]
+	}
+	return ramp[i]
 }
