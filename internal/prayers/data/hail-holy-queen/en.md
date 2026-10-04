@@ -5,7 +5,7 @@ our life, our sweetness and our hope.
 To thee do we cry,
 poor banished children of Eve;
 to thee do we send up our sighs,
-mourning and weeping in this valley of tears.
+mourning and weeping in this vale of tears.
 
 Turn then, most gracious Advocate,
 thine eyes of mercy toward us;

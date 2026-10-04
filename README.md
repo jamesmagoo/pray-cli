@@ -63,6 +63,10 @@ pray list
 ```
 
 ```
+apostles-creed    Apostles' Creed                                 en la
+fatima-prayer     Fatima Prayer                                   en
+glory-be          Glory Be                                        en la
+hail-holy-queen   Hail, Holy Queen                                en la
 hail-mary         Hail Mary                                       en la
 our-father        Our Father                                      en la
 st-carlo-acutis   Prayer of Intercession for Technical Problems   en
@@ -77,8 +81,34 @@ pray list --tag marian
 pray list --lang la
 ```
 
-### Pray
+### Pray the rosary
 
+```sh
+pray rosary
+```
+
+<p align="center">
+  <img src="demo/rosary.gif" alt="Praying the rosary in the terminal: choosing the mysteries, then moving bead by bead from the crucifix to the first decade" width="904">
+</p>
+
+The whole rosary, drawn as a rosary. Choose which mysteries to contemplate, then
+move through it a bead at a time: the crucifix and the Creed, up the pendant, and
+round the ring through five decades to the Hail Holy Queen and the Collect.
+
+The mystery is announced on the Our Father that opens each decade and stays inside
+the ring through the ten Hail Marys that follow.
+
+| Key | What it does |
+|---|---|
+| `space`, `enter`, `→` | The next prayer |
+| `←`, `backspace` | Back one prayer |
+| `↑`, `↓` | Choose the mysteries, on the opening screen |
+| `x`, `esc` | Finish |
+
+It needs a terminal at least 98×34 — it says so if the window is smaller, rather
+than drawing a broken ring.
+
+### Pray
 Type `pray` and the name of a prayer:
 
 ```sh
@@ -168,7 +198,6 @@ pray carlo --for "tonight's deploy" >> deploy.log
 | `-h`, `--help` | Help for `pray` or any command, e.g. `pray copy --help` |
 
 # Coming Soon...
-1. `rosary` mode! 
-2. more prayers
-3. more languages
-4. your contributions!
+1. more prayers
+2. more languages
+3. your contributions!
