@@ -12,7 +12,7 @@ import (
 // progress-watching, so their absence is a design decision worth pinning.
 func TestNoCountsOnScreen(t *testing.T) {
 	m := praying(t)
-	next, _ := m.Update(tea.WindowSizeMsg{Width: m.ring.w + 6, Height: m.ring.h + 6})
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 60})
 	m = next.(model)
 
 	for i := range m.beads {
@@ -39,7 +39,7 @@ func TestHintIsInTheCornerNotTheRing(t *testing.T) {
 		}
 	}
 
-	next, _ := m.Update(tea.WindowSizeMsg{Width: m.ring.w + 6, Height: m.ring.h + 6})
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 60})
 	m = next.(model)
 	rows := strings.Split(m.View().Content, "\n")
 

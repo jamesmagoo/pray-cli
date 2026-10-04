@@ -519,3 +519,59 @@ func TestOpenAndCloseAreSeparateStops(t *testing.T) {
 		}
 	}
 }
+
+// Pendant() must agree with what Sequence() actually builds.
+//
+// It is a hand-written constant — `func Pendant() int { return 5 }` — that the
+// geometry trusts completely: ring.go slices the bead list at that index and
+// treats everything before it as the hanging chain. Nothing made the two agree,
+// so adding or removing a pendant bead in Sequence() without editing Pendant()
+// would silently mis-slice the rosary: a ring bead drawn down the pendant, or a
+// pendant bead flung onto the ring.
+//
+// The structure is derivable, which is what makes this checkable: the pendant is
+// the crucifix and the small beads that follow it, and the ring begins at the
+// first Large bead — the one where the loop opens and closes.
+func TestPendantCountMatchesTheSequence(t *testing.T) {
+	beads := Sequence()
+
+	firstLarge := -1
+	for i, b := range beads {
+		if b.Kind == Large {
+			firstLarge = i
+			break
+		}
+	}
+	if firstLarge < 0 {
+		t.Fatal("the sequence has no Large bead; the ring has nowhere to begin")
+	}
+
+	if Pendant() != firstLarge {
+		t.Errorf("Pendant() is %d but the first big bead — where the ring begins — "+
+			"is at index %d; the geometry will slice the bead list in the wrong place",
+			Pendant(), firstLarge)
+	}
+
+	// And everything below that index really is pendant material: the crucifix
+	// first, then small beads. A Large bead among them would mean the ring's
+	// opening bead is not the first one.
+	if beads[0].Kind != Cross {
+		t.Errorf("bead 0 is %v, want Cross — the pendant hangs from the crucifix",
+			beads[0].Kind)
+	}
+	for i := 1; i < Pendant(); i++ {
+		if beads[i].Kind != Small {
+			t.Errorf("pendant bead %d is %v, want Small", i, beads[i].Kind)
+		}
+	}
+
+	// PendantGapAfter must not point past the pendant either: a gap declared after
+	// a bead that does not exist is silently ignored, and reads as a typo that did
+	// nothing.
+	for i := Pendant(); i < Pendant()+3; i++ {
+		if PendantGapAfter(i) {
+			t.Errorf("PendantGapAfter(%d) is true, but the pendant is only %d beads; "+
+				"that gap can never be drawn", i, Pendant())
+		}
+	}
+}

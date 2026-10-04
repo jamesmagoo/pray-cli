@@ -64,6 +64,8 @@ func TestOtherKeysDoNotFinish(t *testing.T) {
 func TestWindowSizeIsStored(t *testing.T) {
 	m := praying(t)
 
+	// 80x24 deliberately: this is about storing the size, not drawing at it, and a
+	// size too small for the rosary is still a size that must be recorded.
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	got := next.(model)
 
@@ -79,7 +81,7 @@ func TestWindowSizeIsStored(t *testing.T) {
 
 func TestViewShowsThePrayer(t *testing.T) {
 	m := praying(t)
-	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 60})
 
 	// View returns a tea.View; its Content is the text on screen.
 	out := next.(model).View().Content
@@ -202,7 +204,7 @@ func TestHighlightFollowsCursor(t *testing.T) {
 	// The window must be at least the ring's size: lipgloss.Place CLIPS rather
 	// than scaling, so a small window silently cuts off the beads at the edges
 	// and the highlight can vanish with them.
-	next, _ := m.Update(tea.WindowSizeMsg{Width: m.ring.w + 4, Height: m.ring.h + 4})
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 60})
 	m = next.(model)
 
 	for i := range m.beads {
