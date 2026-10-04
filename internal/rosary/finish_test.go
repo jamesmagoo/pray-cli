@@ -295,7 +295,7 @@ func TestBackFromTheFinishScreenReturnsToTheRosary(t *testing.T) {
 	if got.cursor != last {
 		t.Errorf("landed on bead %d, want the last bead %d", got.cursor, last)
 	}
-	if !strings.Contains(plain(render(got)), "Hail Holy Queen") {
+	if !strings.Contains(plain(render(got)), "The Collect") {
 		t.Error("stepping back does not show the closing prayer again")
 	}
 }

@@ -30,27 +30,29 @@ package rosary
 // crucifix, one small bead (Creed and Our Father), and three small beads.
 func Pendant() int { return 5 }
 
-// Prayers said at more than one place in the rosary, defined once.
+// Prayers used by Sequence(), defined once: the first three are said at more than
+// one place in the rosary, the Collect only at the close.
 var (
-	gloryBe = Text("Glory Be",
-		"Glory be to the Father,",
-		"and to the Son,",
-		"and to the Holy Spirit.",
+	gloryBe       = Say("glory-be")
+	hailHolyQueen = Say("hail-holy-queen")
+	fatima        = Say("fatima-prayer")
+
+	// Written inline rather than taken from internal/prayers/data: the Collect is
+	// said only here, at the close, so it is not a prayer you would look up with
+	// `pray <name>`. Swap for Say("collect") if it is ever added to data/.
+	collect = Text("The Collect",
+		"O God, whose only-begotten Son,",
+		"by his life, death and resurrection,",
+		"has purchased for us the rewards of eternal life;",
+		"grant, we beseech thee,",
+		"that meditating upon these mysteries",
+		"of the most holy Rosary of the Blessed Virgin Mary,",
+		"we may imitate what they contain",
+		"and obtain what they promise.",
 		"",
-		"As it was in the beginning, is now,",
-		"and ever shall be, world without end.",
+		"Through the same Christ our Lord.",
 		"",
 		"Amen.")
-
-	hailHolyQueen = Text("Hail Holy Queen",
-		"Hail, Holy Queen, Mother of Mercy,",
-		"our life, our sweetness and our hope.")
-
-	fatima = Text("Fatima Prayer",
-		"O my Jesus, forgive us our sins,",
-		"save us from the fires of hell,",
-		"and lead all souls to Heaven,",
-		"especially those in most need of Thy mercy.")
 )
 
 // PendantGapAfter says whether a blank row of chain follows pendant bead i,
@@ -84,10 +86,7 @@ func Sequence() []Bead {
 			"and of the Holy Spirit.",
 			"",
 			"Amen."),
-		Text("Apostles' Creed",
-			"I believe in God,",
-			"the Father almighty,",
-			"Creator of heaven and earth…"))
+		Say("apostles-creed"))
 
 	// The first bead of the chain: the Our Father, and nothing else.
 	s.add(Small, "Our Father", Say("our-father"))
@@ -131,15 +130,19 @@ func Sequence() []Bead {
 	// The rosary ends where it began: the fingers come round the loop and arrive
 	// back at the first big bead.
 	//
-	// That bead is therefore visited TWICE — once to open (Glory Be, Our Father)
-	// and once to close (Glory Be, Fatima, Hail Holy Queen). A flat sequence cannot
-	// revisit a bead, so this is a second bead at the SAME POSITION: it draws as
-	// one bead on screen, and you pray each visit's prayers separately rather than
-	// all five at once.
+	// That bead is therefore visited TWICE — once to open (Glory Be, Our Father) and
+	// once to close (Glory Be, Fatima, Hail Holy Queen, the Collect). A flat sequence
+	// cannot revisit a bead, so this is a second bead at the SAME POSITION: it draws
+	// as one bead on screen, and you pray each visit's prayers separately rather than
+	// all six at once.
 	//
 	// samePlaceAs(Pendant()) is what pins it to the same cell. It must NOT be given
 	// its own place on the ring, or there would be six big beads.
-	s.addAt(Pendant(), Large, "Hail Holy Queen", gloryBe, fatima, hailHolyQueen)
+	//
+	// The Collect follows the Hail Holy Queen on this same bead: on a real rosary it
+	// is prayed holding the bead the fingers have returned to, not on a bead of its
+	// own, which would put a sixth big bead on the ring.
+	s.addAt(Pendant(), Large, "Hail Holy Queen", gloryBe, fatima, hailHolyQueen, collect)
 
 	return s.beads
 }

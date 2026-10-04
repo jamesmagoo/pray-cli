@@ -34,7 +34,7 @@ var Joyful = MysterySet{
 	Mysteries: [5]string{
 		"The Annunciation",
 		"The Visitation",
-		"The Nativity",
+		"The Nativity of Our Lord",
 		"The Presentation in the Temple",
 		"The Finding in the Temple",
 	},
@@ -75,8 +75,8 @@ var Luminous = MysterySet{
 		"The Baptism in the Jordan",
 		"The Wedding at Cana",
 		"The Proclamation of the Kingdom",
-		"The Transfiguration",
-		"The Institution of the Eucharist",
+		"The Transfiguration of Our Lord",
+		"The Institution of the Holy Eucharist",
 	},
 }
 

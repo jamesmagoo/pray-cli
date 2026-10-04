@@ -292,8 +292,8 @@ func TestPendantShape(t *testing.T) {
 		t.Errorf("the last bead shares place %d, want %d (the first big bead)",
 			last.SameAs-1, Pendant())
 	}
-	if title := last.Says[len(last.Says)-1].Title; title != "Hail Holy Queen" {
-		t.Errorf("the rosary's last prayer is %q, want Hail Holy Queen", title)
+	if title := last.Says[len(last.Says)-1].Title; title != "The Collect" {
+		t.Errorf("the rosary's last prayer is %q, want The Collect", title)
 	}
 }
 
@@ -498,15 +498,15 @@ func TestOpenAndCloseAreSeparateStops(t *testing.T) {
 
 	// Separate stops: the opening bead must NOT carry the closing prayers.
 	for _, w := range start.Says {
-		if w.Title == "Hail Holy Queen" || w.Title == "Fatima Prayer" {
+		if w.Title == "Hail, Holy Queen" || w.Title == "Fatima Prayer" {
 			t.Errorf("the opening bead says %q; the close belongs to the second visit", w.Title)
 		}
 	}
 	if len(start.Says) != 2 {
 		t.Errorf("the opening bead says %d prayers, want 2 (Glory Be, Our Father)", len(start.Says))
 	}
-	if len(last.Says) != 3 {
-		t.Errorf("the closing bead says %d prayers, want 3 (Glory Be, Fatima, Hail Holy Queen)",
+	if len(last.Says) != 4 {
+		t.Errorf("the closing bead says %d prayers, want 4 (Glory Be, Fatima, Hail, Holy Queen, the Collect)",
 			len(last.Says))
 	}
 
