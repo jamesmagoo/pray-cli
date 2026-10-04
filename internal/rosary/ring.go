@@ -398,13 +398,6 @@ func spacedOut(n, rx, ry int) bool {
 	return true
 }
 
-func abs(n int) int {
-	if n < 0 {
-		return -n
-	}
-	return n
-}
-
 // clears reports whether every bead sits clear of the text block, that is: for
 // any bead on a row the text occupies, the bead is at least half the text's
 // width plus a gutter away from the centre.
@@ -442,12 +435,6 @@ func drawRosary(g ringGeometry, beads []Bead, cursor, glow, fade int, lines []st
 	// The geometry is handed in, already fixed: this function draws, it does not
 	// decide how big the ring is. That separation is what keeps the ring still
 	// while the prayers change.
-	textW := 0
-	for _, l := range lines {
-		if w := lipgloss.Width(l); w > textW {
-			textW = w
-		}
-	}
 	textH := len(lines)
 
 	c := newCanvas(g.w, g.h)
@@ -498,7 +485,6 @@ func drawRosary(g ringGeometry, beads []Bead, cursor, glow, fade int, lines []st
 	for i, l := range lines {
 		c.text(g.cx-lipgloss.Width(l)/2, top+i, l)
 	}
-	_ = textW
 
 	return styleGrid(c, g, beads, cursor, glow, fade)
 }

@@ -2266,9 +2266,14 @@ The panel is 44 because that is the longest prayer line in the rosary
 (`as we forgive those who trespass against us;`), and it is a **fixed** width so
 the layout does not shift between prayers.
 
-`lipgloss.Place` clips rather than scales, so in a narrow terminal the beads at
-the edges silently vanish. (This bit me in a test once: a highlight "disappeared"
-purely because the test window was too small.)
+**It does not degrade — it overflows.** `lipgloss.Place` pads the block out to the
+window's full width rather than clipping it, so on an 80×24 terminal the program
+emits **34 rows of 98 columns** and the terminal wraps every one of them. The
+layout does not shrink, truncate, or warn; it corrupts. Measured, not assumed.
+
+There is no minimum-size check anywhere. Adding one is the smallest honest fix:
+`View` could show a plain "this rosary needs an N×M terminal" below some
+threshold, rather than drawing something unreadable.
 
 Options, roughly in order of how well each preserves the design:
 

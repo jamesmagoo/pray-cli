@@ -17,19 +17,6 @@ func ringAngle(g ringGeometry, p [2]int) float64 {
 	return a
 }
 
-// bigBeadAngles is where the five big beads sit, in the order prayed.
-func bigBeadAngles(t *testing.T, m model) []float64 {
-	t.Helper()
-	var out []float64
-	for i, b := range m.beads {
-		if b.Kind != Large || b.SameAs > 0 {
-			continue
-		}
-		out = append(out, ringAngle(m.ring, m.ring.pos[i]))
-	}
-	return out
-}
-
 // The five big beads are evenly spaced around the ring, and symmetrically placed.
 //
 // Spacing is measured along the CHAIN — the distance round the ring from one big

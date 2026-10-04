@@ -561,16 +561,11 @@ const (
 	rosarySubtitle = "of the Blessed Virgin Mary"
 )
 
-// hint is the one line of chrome: the keys, and nothing else. It is drawn in a
-// corner of the screen, not inside the rosary — see withHint.
-//
-// No counts. "Hail Mary 3 of 10" and "bead 11 of 68" turn praying into
-// progress-watching: the eye goes to the number instead of the words, and the
-// rosary becomes a task with a completion bar. The beads already show where you
-// are, which is the right place for it — in the object, not in text.
-func hint() string {
-	return "space next   ← back   x finish"
-}
+// No counts anywhere on screen. "Hail Mary 3 of 10" and "bead 11 of 68" turn
+// praying into progress-watching: the eye goes to the number instead of the words,
+// and the rosary becomes a task with a completion bar. The beads already show where
+// you are, which is the right place for it — in the object, not in text.
+// TestNoCountsOnScreen holds this.
 
 // Bead colours. The big beads and the crucifix are gold, the small beads blue;
 // the bead being prayed is brighter and bold so it reads as "you are here" even
