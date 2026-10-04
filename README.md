@@ -40,7 +40,40 @@ Pray cli allows you to bring prayer into the command line interface - whether th
 
 ### Install
 
-You'll need Go 1.25 or newer.
+**macOS or Linux, with Homebrew:**
+
+```sh
+brew install jamesmagoo/tap/pray
+```
+
+Shell completions for bash, zsh and fish come with it.
+
+**Linux, with a package:** download the `.deb`, `.rpm` or `.apk` for your
+architecture from the [latest release][latest] and install it:
+
+```sh
+sudo dpkg -i pray_0.1.1_linux_amd64.deb     # Debian, Ubuntu
+sudo rpm -i pray_0.1.1_linux_amd64.rpm      # Fedora, RHEL
+sudo apk add --allow-untrusted pray_0.1.1_linux_amd64.apk
+```
+
+`pray copy` needs `xclip`, `xsel` or `wl-clipboard` on Linux; the packages
+suggest them rather than requiring them.
+
+**Windows, or any platform, from a binary:** grab the archive for your system
+from the [latest release][latest], unpack it, and put `pray` somewhere on your
+`PATH`. Builds are published for macOS, Linux and Windows on both x86-64 and
+ARM64. `checksums.txt` in the release verifies them:
+
+```sh
+shasum -a 256 -c checksums.txt --ignore-missing
+```
+
+macOS note: the binaries aren't signed by Apple, so Gatekeeper blocks the ones
+you download by hand. Clear the quarantine flag with
+`xattr -dr com.apple.quarantine ./pray`. The Homebrew cask does this for you.
+
+**With Go:** you'll need Go 1.26 or newer.
 
 ```sh
 go install github.com/jamesmagoo/pray-cli/cmd/pray@latest
@@ -55,6 +88,10 @@ git clone https://github.com/jamesmagoo/pray-cli
 cd pray-cli
 just install        # or: go install ./cmd/pray
 ```
+
+Check what you've got with `pray --version`.
+
+[latest]: https://github.com/jamesmagoo/pray-cli/releases/latest
 
 ### See what's available
 
@@ -196,6 +233,7 @@ pray carlo --for "tonight's deploy" >> deploy.log
 | `--lang <code>` | Language: `en` (default) or `la` |
 | `--tag <tag>` | With `pray list`: only prayers with this tag, e.g. `marian` |
 | `-h`, `--help` | Help for `pray` or any command, e.g. `pray copy --help` |
+| `-v`, `--version` | The version you have installed |
 
 # Coming Soon...
 1. more prayers
