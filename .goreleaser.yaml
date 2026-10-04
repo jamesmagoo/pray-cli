@@ -1,0 +1,92 @@
+# GoReleaser config for pray-cli.
+# Tag a release (git tag v0.1.0 && git push --tags) and the GitHub Action
+# builds binaries for every platform, attaches them to a GitHub release, and
+# publishes to Homebrew, Scoop and Linux packages (.deb/.rpm/.apk).
+#
+# Try it locally without publishing:  goreleaser release --snapshot --clean
+version: 2
+
+project_name: pray
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - main: ./cmd/pray
+    binary: pray
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X github.com/jamesmagoo/pray-cli/internal/cli.version={{ .Version }}
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude: ["^docs:", "^test:", "^chore:"]
+
+# brew install jamesmagoo/tap/pray
+homebrew_casks:
+  - name: pray
+    binaries: [pray]
+    homepage: https://github.com/jamesmagoo/pray-cli
+    description: Prayers in your terminal
+    license: Unlicense
+    # pray is a Cobra app, so Homebrew can generate bash/zsh/fish completions
+    # by running `pray completion <shell>` at install time.
+    generate_completions_from_executable:
+      executable: pray
+      args: [completion]
+      shell_parameter_format: cobra
+    # The binary isn't signed by Apple, so macOS would refuse to run it
+    # ("pray is damaged"). This clears the quarantine flag on install.
+    # Drop it if you later pay for an Apple Developer ID and notarize.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/pray"]
+          end
+    repository:
+      owner: jamesmagoo
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+
+# scoop bucket add jamesmagoo https://github.com/jamesmagoo/scoop-bucket
+# scoop install pray
+#scoops:
+#  - name: pray
+#    homepage: https://github.com/jamesmagoo/pray-cli
+#    description: Prayers in your terminal
+#    license: Unlicense
+#    repository:
+#      owner: jamesmagoo
+#      name: scoop-bucket
+#      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+
+# .deb / .rpm / .apk files attached to each GitHub release
+nfpms:
+  - package_name: pray
+    homepage: https://github.com/jamesmagoo/pray-cli
+    maintainer: James McGauran <you@example.com>
+    description: Prayers in your terminal
+    license: Unlicense
+    formats: [deb, rpm, apk]
+    # `pray copy` needs one of these on Linux
+    suggests: [xclip, xsel, wl-clipboard]
