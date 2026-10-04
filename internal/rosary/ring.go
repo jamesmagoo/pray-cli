@@ -112,9 +112,9 @@ func pendantRows() int {
 // still keeps every bead on its own cell.
 //
 // Taller again curves more still, but then consecutive beads land more than a row
-// apart and the chain breaks into strands — the trade this sits between, and the
-// reason scripts/shapes.sh prints both numbers: the flat run and the empty rows.
-// See TestTheRingHasNoBreaks.
+// apart and the chain breaks into strands — the trade this sits between. The
+// measured numbers for each candidate ratio are in ROSARY-TUI.md, under "The
+// ring's shape is a trade". See also TestTheRingHasNoBreaks.
 func ringWidth(ry int) int { return ry * 3 / 2 }
 
 // centre returns the ring's centre for the given radii. Both the sizing check

@@ -449,7 +449,7 @@ every position and visibly distorts the shape. `int(math.Round(x))` is correct.
 | `model.go` | *State and the loop*: the Bubble Tea `Model` |
 | `phase.go` | Which of the three screens is showing: chooser, rosary, close |
 | `cross.go` | The crucifix: line-drawn art, and the cells it occupies |
-| `scripts/` | Design previews — run them, don't read them |
+| `scripts/` | Colour and glyph previews — run them, don't read them |
 | `run.go` | Entry point; the only thing `internal/cli` touches |
 
 The ordering is deliberate: structure → geometry → colour. Each layer depends
@@ -1506,14 +1506,15 @@ asserts nothing:
 
 | Script | Shows |
 |---|---|
-| `shapes.sh` | The rosary at each candidate ring shape, with the three competing faults measured |
 | `swatch.sh` | Bead colours, with and without `Faint` |
 | `stars.sh` | Star glyphs, as the font actually paints them |
 
-`shapes.sh` is backed by `TestPreviewShapes`, a test that cannot fail by design —
-it is a renderer that happens to live in the test tree so it can reach the package's
-internals. Keep it that way: the moment a preview asserts something, it stops being
-safe to change the thing it previews.
+There was a `shapes.sh` too, for choosing the ring's proportions. It needed a
+preview renderer in the test tree — the geometry is unexported, so nothing outside
+the package can draw a ring — and that meant a second copy of the layout code,
+which could drift from the real one without anything noticing. Deleted once the
+shape was settled. The numbers it produced are in the table above; rebuild it from
+those if the question reopens.
 
 > ### Trap: `strings.Contains` cannot find text drawn on the grid
 >
@@ -2142,14 +2143,9 @@ for ; ry < 200; ry++ {
 | Tighter around the text | `const gutter = 3` → smaller. This is the blank cells kept between a bead and the text |
 | Narrower text inside | `mysteryWidth` → smaller, which lets the ring shrink. Really a dial on the RING, by way of the text it has to clear |
 
-### The ring's shape is a trade, and `scripts/shapes.sh` shows it
+### The ring's shape is a trade
 
-Three faults compete, and no shape avoids all three. **Run the script and look** —
-this is not a decision to make from a table:
-
-```
-$ ./scripts/shapes.sh
-```
+Three faults compete, and no shape avoids all three:
 
 | | What it is | Caused by |
 |---|---|---|
