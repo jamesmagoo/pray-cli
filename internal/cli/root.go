@@ -15,9 +15,13 @@ import (
 var lang string
 var intention string
 
+// version is overwritten at build time by GoReleaser via -ldflags -X.
+var version = "dev"
+
 var rootCmd = &cobra.Command{
 	Use:          "pray [prayer]",
 	Short:        "Prayers in your terminal",
+	Version:      version,
 	Args:         cobra.ArbitraryArgs,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {

@@ -84,7 +84,7 @@ homebrew_casks:
 nfpms:
   - package_name: pray
     homepage: https://github.com/jamesmagoo/pray-cli
-    maintainer: James McGauran <you@example.com>
+    maintainer: James McGauran <jamesmcgauran11@gmail.com>
     description: Prayers in your terminal
     license: Unlicense
     formats: [deb, rpm, apk]
