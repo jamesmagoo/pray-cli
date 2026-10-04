@@ -36,11 +36,7 @@ var (
 	gloryBe       = Say("glory-be")
 	hailHolyQueen = Say("hail-holy-queen")
 	fatima        = Say("fatima-prayer")
-
-	// Written inline rather than taken from internal/prayers/data: the Collect is
-	// said only here, at the close, so it is not a prayer you would look up with
-	// `pray <name>`. Swap for Say("collect") if it is ever added to data/.
-	collect = Text("The Collect",
+	collect       = Text("The Collect",
 		"O God, whose only-begotten Son,",
 		"by his life, death and resurrection,",
 		"has purchased for us the rewards of eternal life;",
@@ -95,14 +91,6 @@ func Sequence() []Bead {
 	s.run(Small, 3, "Hail Mary", Say("hail-mary"))
 
 	// ── Five decades ─────────────────────────────────────────────────────────
-	//
-	// Each decade is ONE big bead followed by ten small ones.
-	//
-	// The big bead carries every prayer said at that junction: the Glory Be and
-	// Fatima Prayer closing the decade before, then the Our Father opening this
-	// one. On a real rosary that is a single bead held once while all three are
-	// prayed — adding a separate bead for the Glory Be put two big beads side by
-	// side, which is not what the object looks like.
 	for decade := 1; decade <= 5; decade++ {
 		junction := []Words{}
 

@@ -9,10 +9,6 @@ import (
 // The colours of RENDERING.md, kept here while the rosary is the only thing
 // using them. When internal/render lands they move to render/theme.go and this
 // file imports them instead, so there is one definition of gold.
-//
-// Only gold is used so far: the ring is gold and the prayer keeps the terminal's
-// own colour, which is RENDERING.md's restraint principle. Purple is reserved
-// there for the intention line and arrives with it.
 var gold = lipgloss.Color("#C9A227")
 
 // beadBlue is the small beads — the Hail Marys and the pendant's chain.
@@ -21,14 +17,6 @@ var gold = lipgloss.Color("#C9A227")
 // (50 of 55 beads), so colouring them apart from the five big ones separates the
 // decades from their junctions by hue rather than by size alone, which the two
 // circle glyphs do only quietly.
-//
-// Cornflower: deep enough to sit under the gold without competing, now that the
-// smalls are drawn at full strength rather than Faint. Lavender (#8FA9D0) was
-// tried and read washed out once undimmed.
-//
-// Everything else stays gold: the big beads, the crucifix, the mystery, the
-// chooser and the hints. This is deliberately a two-colour palette and not a
-// theme — see beadDim, the one style that uses this.
 var beadBlue = lipgloss.Color("#5B8DD6")
 
 // currentRest is the colour the bead under the cursor sits at between moves:
@@ -50,11 +38,11 @@ func render(m model) string {
 		return placeFinished(m, farewell(m))
 	}
 
-	// INSIDE the ring: the mystery, in its bordered box.
+	// INSIDE the ring: the mystery.
 	//
-	// The box is drawn as plain text on the grid (borders included) and styled
-	// afterwards, because the grid has to count cells and an escape sequence is not
-	// one cell wide. styleGrid colours these rows by position — see mysteryRows.
+	// Written as plain text onto the grid and styled afterwards, because the grid
+	// counts cells and an escape sequence is not one cell wide. styleGrid colours
+	// these rows by position.
 	inside := mysteryLines(m.set, m.announced())
 
 	rosary := drawRosary(m.ring, m.beads, m.cursor, m.glow, m.fade, inside)
@@ -69,13 +57,6 @@ func render(m model) string {
 
 	return place(m, block)
 }
-
-// place centres a block in the window, or says the window is too small.
-//
-// The size needed is MEASURED from the block rather than declared as a constant,
-// so it cannot drift: change the ring, the panel or the prayers and the threshold
-// follows. (It moved on its own once already — the real prayers are longer than
-// the placeholders they replaced, which took the panel from 44 columns to 59.)
 
 // gutterCols is the space between the ring and the prayer beside it.
 const gutterCols = "    "
@@ -106,15 +87,10 @@ func prayerPanel(m model) string {
 
 	// A FIXED width, not the width of this prayer.
 	//
-	// Sizing the panel to its contents makes the whole screen jump: the joined
-	// block gets narrower for a short prayer, and Place re-centres it, so the
-	// rosary slides sideways every time you move to a different prayer. Measured
-	// before this fix: the panel swung between 26 and 44 columns and the ring
-	// moved 9 columns left and right.
-	//
-	// Reserving the width of the longest prayer in the whole rosary means the
-	// block is the same size on every frame, so nothing moves. Short prayers
-	// simply leave empty space on the right.
+	// Sizing the panel to its contents makes the whole screen jump: the block gets
+	// narrower for a short prayer and Place re-centres it, sliding the rosary
+	// sideways on every move. Reserving the longest prayer's width keeps every
+	// frame the same size; short prayers just leave space on the right.
 	return lipgloss.NewStyle().
 		Width(m.panelW).
 		MaxWidth(m.panelW).
@@ -142,13 +118,9 @@ func mysteryLines(set MysterySet, announced int) []string {
 		return nil
 	}
 
-	// No border. A box inside the ring meant the ring had to be large enough to
-	// clear it, and the beads ended up sitting on the border — two frames
-	// competing for the same space. The ring IS the frame; the mystery just sits
-	// inside it, styled.
+	// The ring IS the frame, so there is no border here: one inside another put the
+	// beads on the border, two frames competing for the same space.
 	//
-	// Plain text, because these rows are written onto the grid cell by cell and an
-	// escape sequence is not one cell wide. Colour is added in styleGrid.
 	// The set's name is NOT wrapped: it is a title and breaks badly ("The Glorious /
 	// Mysteries"), where a mystery's name has natural seams. The ring is sized to
 	// clear whatever goes in it, so the set name is simply the widest line it has to
@@ -159,38 +131,30 @@ func mysteryLines(set MysterySet, announced int) []string {
 
 // mysteryWidth is the widest a mystery's name may be before it wraps.
 //
-// The ring is sized to clear whatever goes inside it, so an over-long name makes
-// the whole rosary grow: "The Coronation of the Blessed Virgin Mary" is 41 cells
-// and pushed the ring from 18x9 to 24x12 — which breaks the chain, since beads
-// then sit more than a row apart and leave empty rows down the sides.
+// The ring is sized to clear whatever goes inside it, so an over-long name grows
+// the whole rosary until beads sit more than a row apart and the chain breaks
+// into strands.
 //
-// 20, chosen by measuring rather than by taste: it is the width at which the ring
-// comes out 16x10, the roundest shape that keeps every bead on its own cell with
-// no row left empty. Wider grows the ring until rows appear with no bead on them
-// at all and the chain reads as broken strands; narrower does not shrink it
-// further, because the beads then set the size rather than the text.
+// 20 by measurement, not taste: the width at which the ring comes out 16x10, the
+// roundest shape keeping every bead on its own cell with no row left empty.
+// Narrower does not shrink it further — the beads set the size below that. So
+// this is really a dial on the RING. Change it and check TestTheRingHasNoBreaks.
 //
-// So this constant is really a dial on the RING, by way of the text it has to
-// clear. Change it and check TestTheRingHasNoBreaks.
-//
-// It applies to the SET's name as well as the mystery's: "The Sorrowful
-// Mysteries" is 23 cells and was the widest line inside the ring, so wrapping only
-// the mysteries left the set name setting the floor.
+// It bounds the SET's name too, which at 23 cells is otherwise the widest line
+// inside the ring.
 const mysteryWidth = 20
 
 // wrapMystery breaks a mystery's name onto as few lines as will fit mysteryWidth,
 // splitting only at spaces and BALANCING the lines it produces.
 //
-// Balanced, not greedy, and the difference is visible. Greedy wrapping fills each
-// line to the limit before breaking, which is right for prose and wrong for a
-// title centred in a ring: "The Transfiguration" came out as "The" over
-// "Transfiguration", and "The Crowning with Thorns" as "The Crowning with" over a
-// lone "Thorns". Choosing the break that makes the lines most equal puts it where
-// a person would: "The Crowning" over "with Thorns".
+// Balanced, not greedy. Greedy wrapping fills each line before breaking, which is
+// right for prose and wrong for a title centred in a ring: it gives "The Crowning
+// with" over a lone "Thorns", where balancing puts the break where a person would,
+// at "The Crowning" over "with Thorns".
 //
-// It tries every split point for two lines, then every pair for three, and keeps
-// the arrangement whose longest line is shortest. Twenty names of five or six
-// words each — the cost is nothing and the result needs no per-name special cases.
+// It tries every split point for two lines, then every pair for three, keeping the
+// arrangement whose longest line is shortest. Twenty names of five or six words:
+// the cost is nothing and no name needs a special case.
 func wrapMystery(name string) []string {
 	if lipgloss.Width(name) <= mysteryWidth {
 		return []string{name}
@@ -251,8 +215,12 @@ func linesFrom(words []string, cuts []int) []string {
 	return lines
 }
 
-// place centres a block in the window, or returns it unplaced before the first
-// WindowSizeMsg arrives — centring inside a 0x0 box would collapse it.
+// place centres a block in the window, or says the window is too small. Before the
+// first WindowSizeMsg it returns the block unplaced: centring inside a 0x0 box
+// would collapse it.
+//
+// The size needed is MEASURED from the block rather than declared as a constant,
+// so it cannot drift as the ring, the panel or the prayers change.
 func place(m model, block string) string {
 	if m.width == 0 || m.height == 0 {
 		return block
@@ -268,9 +236,9 @@ func place(m model, block string) string {
 // withHint writes the key hint into the bottom-left corner of a full screen.
 //
 // It is drawn ONTO the finished screen rather than joined to the rosary, which is
-// the point: chrome should not take part in the layout. Inside the ring it was
-// competing with the prayer for attention and padding out the ring's height; in a
-// corner it is available without being read.
+// the point: chrome should not take part in the layout, or it competes with the
+// prayer and pads out the ring's height. In a corner it is available without
+// being read.
 func withHint(m model, screen string) string {
 	rows := strings.Split(screen, "\n")
 	if len(rows) < 2 {
@@ -340,9 +308,8 @@ func overlay(row, s string, x int) string {
 var (
 	// The small beads, and the only non-gold thing on the ring.
 	//
-	// NOT Faint. Faint dims whatever colour it is given, which muddied the blue —
-	// the hue was being chosen and then half thrown away. The smalls still recede
-	// behind the big beads, by hue and by the hollow glyph rather than by dimming.
+	// NOT Faint, which would dim the blue to mud — choosing a hue and then half
+	// throwing it away. The smalls recede by hue and by the hollow glyph instead.
 	beadDim   = lipgloss.NewStyle().Foreground(beadBlue)
 	beadLarge = lipgloss.NewStyle().Foreground(gold)
 	// The resting current bead: bright and bold, but no Reverse — see glowStyle.
@@ -373,11 +340,11 @@ func beadStyle(k Kind, current bool, glow int) lipgloss.Style {
 	}
 }
 
-// Styles for the mystery box and the chooser.
+// Styles for the opening screen, and the text inside the ring.
 var (
-	// Padding(vertical, horizontal). The vertical 1 is the half that was missing:
-	// at 0 the border sat directly on the crown of the cross and on the keys, which
-	// is what made the box feel tight however wide it was.
+	// The frame around the chooser. Padding(vertical, horizontal): without the
+	// vertical 1 the border sits directly on the crown of the cross and on the
+	// keys, which reads as tight however wide the box is.
 	boxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(gold).
@@ -426,10 +393,8 @@ func widestPrayer(beads []Bead) int {
 	for _, b := range beads {
 		for _, says := range b.Says {
 			// The heading is the prayer's TITLE (see prayerPanel), not the bead's
-			// name, so that is what has to be measured. Measuring the bead's name
-			// would reserve the wrong width for any bead whose prayers are titled
-			// differently from it — a junction bead is named "Our Father" but shows
-			// "Glory Be" and "Fatima Prayer" too.
+			// name, so that is what has to be measured: a junction bead is named
+			// "Our Father" but also shows "Glory Be" and "Fatima Prayer".
 			if x := lipgloss.Width(says.Title); x > w {
 				w = x
 			}
