@@ -7,7 +7,7 @@ import (
 
 var rosaryCmd = &cobra.Command{
 	Use:   "rosary",
-	Short: "Pray the rosary, one bead at a time",
+	Short: "Pray the Holy Rosary of The Blessed Virgin Mary",
 	Example: `  pray rosary
   pray rosary --lang la`,
 	Args: cobra.NoArgs,

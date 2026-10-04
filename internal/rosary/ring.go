@@ -7,36 +7,34 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// Drawing the rosary as a ring with the prayer inside it.
+// Drawing the rosary as a ring, with the mystery named inside it.
 //
-// The ring is not a fixed picture with a hole in the middle. It is computed from
-// the text it has to enclose: given the prayer's longest line, grow the ring
-// until no bead sits in a row the text occupies. That way a short prayer gets a
-// snug ring and a long one a wide one, and a bead never lands on a word, which
-// is the thing that makes a hand-placed ring fall apart as soon as the text
-// changes.
+// The ring is not a fixed picture with a hole in the middle: it is grown until
+// two things hold at once — no bead lands on the text inside (clears), and no two
+// beads land on the same cell (spacedOut). Growing to a measurement rather than
+// placing cells by hand is what stops the whole thing falling apart the moment
+// the text or the number of beads changes.
+//
+// Of those two, the beads are what actually decide the size: the mystery is a
+// short label and clears by ry=3, while the 55 beads do not all get their own
+// cell until ry=10, which is where the ring settles.
+//
+// The prayer itself is not in here at all. It sits BESIDE the ring, joined on as
+// a separate block by view.go, so the ring neither knows nor cares how long it is.
 
 // gutter is the blank cells kept between a bead and the text beside it.
 const gutter = 3
 
-// pendantLen is how many beads of the sequence hang below the ring rather than
-// sitting on it: the crucifix and the short chain up to the first decade.
+// pendantLen is how many beads hang below the ring rather than sitting on it.
 //
-// They are the FIRST beads of Sequence(), because that is the order they are
-// prayed. Drawing them on the pendant rather than on the ring is a display
-// choice, so it lives here and not in sequence.go — but they are the same beads,
-// with the same cursor, so the crucifix is navigable like anything else.
-//
-// Set it with Pendant() in sequence.go rather than editing this: the pendant's
-// length is part of the shape you are describing, and a number here that has to
-// be kept in sync with the sequence by hand is a bug waiting to happen.
+// They are the FIRST beads of Sequence(), so hanging them on the pendant is a
+// display choice — but they are the same beads with the same cursor, and the
+// crucifix is navigable like anything else. Change it in sequence.go, not here.
 var pendantLen = Pendant()
 
 // canvas is a fixed grid of cells we place glyphs on, then join into lines.
-//
 // Drawing onto a grid rather than building strings is what lets the ring and the
-// text be positioned independently and still compose: each knows its own
-// coordinates and neither has to know the other's layout.
+// text be positioned independently and still compose.
 type canvas struct {
 	cells [][]rune
 	w, h  int
@@ -58,7 +56,6 @@ func (c *canvas) set(x, y int, r rune) {
 	}
 }
 
-// text writes a line left-to-right from (x, y).
 func (c *canvas) text(x, y int, s string) {
 	for i, r := range s {
 		c.set(x+i, y, r)
@@ -75,14 +72,10 @@ func (c *canvas) text(x, y int, s string) {
 // away from the crucifix, up the left side, round, and back down, the direction
 // the fingers go.
 //
-// It used to be an open arc with a 51.6 degree gap at the bottom, on the theory
-// that a rosary's loop has a mouth where the pendant joins it. That was the thing
-// stopping the five big beads from forming a pentagon: 55 beads spread over a
-// partial arc give 62.8 degrees between every eleventh one, and no amount of even
-// spacing fixes it. A CLOSED loop of 55 divides by five exactly, so the pentagon
-// falls out at 72.00 degrees with nothing arranging it. The pendant hangs from the
-// bottom bead rather than through a hole beside it, which is also how a real
-// rosary is strung.
+// It must stay a CLOSED loop. An open arc with a gap at the bottom cannot put the
+// five big beads on a pentagon: 55 beads over a partial arc give 62.8 degrees
+// between every eleventh one. Closed, 55 divides by five exactly and the pentagon
+// falls out at 72 degrees with nothing arranging it.
 const (
 	ringStart = -math.Pi / 2 // straight down: the bottom of the loop
 	ringArc   = -2 * math.Pi // a full turn, counter-clockwise
@@ -102,18 +95,14 @@ func pendantRows() int {
 // ringWidth is the horizontal radius for a given vertical one.
 //
 // NOT 2:1, which is what makes a visual circle (a cell is about twice as tall as
-// it is wide — see cellAspect). A true circle is the wrong shape here, because an
-// ellipse is FLATTEST where it crosses the vertical axis: at 2:1 the top and
-// bottom of the ring each held six beads in a straight horizontal line, which read
-// as a flat run rather than as a curve, while the sides curved properly.
+// it is wide — see cellAspect). An ellipse is FLATTEST where it crosses the
+// vertical axis, so a true circle puts six beads in a straight line across the
+// top and bottom, reading as a flat run rather than a curve.
 //
-// 3:2 is squatter than a circle and so curves harder top and bottom, which is
-// where the beads crowd. Measured at 55 beads, it is the roundest shape that
-// still keeps every bead on its own cell.
-//
-// Taller again curves more still, but then consecutive beads land more than a row
-// apart and the chain breaks into strands — the trade this sits between. The
-// measured numbers for each candidate ratio are in ROSARY-TUI.md, under "The
+// 3:2 is squatter, so it curves harder exactly where the beads crowd. Measured at
+// 55 beads it is the roundest shape that still keeps every bead on its own cell:
+// taller curves more but breaks the chain into strands, as consecutive beads land
+// more than a row apart. Numbers for each ratio are in ROSARY-TUI.md, under "The
 // ring's shape is a trade". See also TestTheRingHasNoBreaks.
 func ringWidth(ry int) int { return ry * 3 / 2 }
 
@@ -132,17 +121,15 @@ type ringGeometry struct {
 
 // fixedRing sizes the ring ONCE, for the whole rosary.
 //
-// This is the important decision in here. A self-sizing ring — one re-measured
-// per bead — looks broken in motion: the ring breathes in and out as you move
-// between a long prayer and a short one, and the beads crawl. A rosary is a
-// physical object, so the ring is measured to the LONGEST prayer in the whole
-// sequence and then never changes. Short prayers simply sit in more space.
-// The ring now encloses the MYSTERY, not the prayer, so it is sized against the
-// widest mystery box of any set — a much smaller block than a prayer, which is why
-// the ring is tighter than it used to be.
+// This is the important decision in here. A self-sizing ring — one re-measured as
+// you go — looks broken in motion: it breathes in and out as the text inside
+// changes and the beads crawl with it. A rosary is a physical object, so the ring
+// is measured against the widest and tallest mystery of ANY set, then never
+// changes. A shorter mystery simply sits in more space.
 //
-// It is still sized once and frozen: the box is a fixed size per set, so the ring
-// does not move as the mysteries change either.
+// Measuring every set, not just the chosen one, is what makes it hold still when
+// the mysteries change — and the walk is over four sets of five short labels, so
+// it costs nothing to be thorough at startup.
 func fixedRing(beads []Bead) ringGeometry {
 	textW, textH := 0, 0
 	for _, set := range Sets() {
@@ -170,33 +157,23 @@ func fixedRing(beads []Bead) ringGeometry {
 func layout(beads []Bead, textW, textH int) ringGeometry {
 	n := len(beads)
 
-	// How many positions the ring actually has to hold.
-	//
-	// NOT len(beads) minus the pendant: a bead with SameAs is drawn on top of
-	// another and takes no place of its own. Counting it made the sizing checks
-	// test a ring one bead denser than the one being drawn, so the ring was grown
-	// to clear a crowding that never happened — and the extra size pushed the five
-	// big beads off their even spacing.
+	// How many positions the ring has to hold. NOT len(beads) minus the pendant: a
+	// bead with SameAs is drawn on top of another and takes no place of its own.
+	// Counting it grows the ring to clear a crowding that never happens, which
+	// pushes the five big beads off their even spacing.
 	onRingSlots := 0
 	for i := pendantLen; i < n; i++ {
 		if beads[i].SameAs == 0 {
 			onRingSlots++
 		}
 	}
-	// Grow the ring until no bead sits on a letter.
+	// Grow until the beads have room and the text is clear. Only ry is stepped; rx
+	// follows through ringWidth, so the ring keeps its shape instead of stretching
+	// sideways.
 	//
-	// Both radii have to be free to grow, not just rx. With many beads the ring is
-	// crowded: beads land only a cell or two apart, so widening alone cannot help
-	// if the ring is too SHORT — there will always be a bead on a text row. Each
-	// pass widens, and every few passes also heightens, so the ring escapes in
-	// whichever direction it is stuck.
-	// Grow outwards on a fixed ratio, so the ring keeps its shape while it sizes
-	// itself. ringRatio is what that shape is.
-	//
-	// With the mystery inside — a short label, not a prayer — the contents no longer
-	// constrain the ring much; its size is set almost entirely by the beads needing
-	// room not to touch. Growing on a fixed ratio keeps it round while that happens,
-	// where growing rx faster than ry stretched it sideways.
+	// spacedOut is what actually stops this loop — the mystery is a short label and
+	// clears almost at once. Both are checked anyway: a longer label would make
+	// clears bind again.
 	ry := textH/2 + 2
 	for ; ry < 200; ry++ {
 		if rx := ringWidth(ry); clears(rx, ry, n, textW, textH) && spacedOut(onRingSlots, rx, ry) {
@@ -214,30 +191,15 @@ func layout(beads []Bead, textW, textH int) ringGeometry {
 		h: ry*2 + 3 + pendantRows() + crossRows() + 1,
 	}
 	g.cx, g.cy = centre(rx, ry)
-	// The first pendantLen beads hang below the ring, in a line from the gap; the
-	// rest are spaced around the arc.
-	//
-	// The chain starts at the ring's own bottom row, not below it, so the pendant
-	// is visibly ATTACHED. A one-row gap here makes the crucifix look like it is
-	// floating free of the rosary, which is wrong: on a real rosary the pendant
-	// hangs from the ring.
-	// Drawn bottom-up: the crucifix is furthest from the ring. Gaps are blank rows
-	// of chain between beads, so the pendant reads as
-	//
-	//	crucifix — bead — gap — three beads — gap — the ring
-	//
-	// rather than as one unbroken column of beads.
 	g.pos = make([][2]int, n)
 
-	// Drawn bottom-up from the crucifix, so the gap declared AFTER bead i is the
-	// blank row ABOVE it — between it and the bead nearer the ring.
+	// The pendant, drawn bottom-up from the crucifix — so the gap declared AFTER
+	// bead i is the blank row ABOVE it, between it and the bead nearer the ring.
 	//
-	// The topmost pendant bead therefore has to START one row lower than the ring's
-	// bottom bead, by however much gap is declared after it: the pendant hangs FROM
-	// the ring, so the separation between the two belongs here, not inside the loop
-	// where it would be decremented after the last bead and never used. It was, and
-	// the result was a bottom bead sitting directly on the pendant with no gap at
-	// all, however PendantGapAfter was written.
+	// The gap after the TOPMOST bead is the one between the pendant and the ring,
+	// so it has to be applied here, before the loop. Inside, it would be
+	// decremented past the last bead and never used — which left the ring's bottom
+	// bead sitting directly on the pendant however PendantGapAfter was written.
 	row := g.cy + g.ry + pendantRows() - 1
 	if PendantGapAfter(pendantLen - 1) {
 		row++
@@ -267,17 +229,9 @@ func layout(beads []Bead, textW, textH int) ringGeometry {
 		own = append(own, i)
 	}
 
-	// Every ring bead, spaced evenly around the closed loop in ONE run.
-	//
-	// The first of them lands at ringStart — straight down, directly above the
-	// pendant — because that is where the walk begins, so the bead the loop opens
-	// and closes on sits at the join without being placed by hand.
-	//
-	// It used to be pinned there explicitly, with the rest spaced over the arc
-	// above it and one extra slot requested and dropped to stop the run's two ends
-	// colliding. All of that was scaffolding for the open arc. A closed loop needs
-	// none of it: ask for exactly as many slots as there are beads and they come
-	// back evenly spaced with the first at the bottom.
+	// Every ring bead in ONE evenly spaced run. The first lands at ringStart —
+	// straight down, above the pendant — so the bead the loop opens and closes on
+	// sits at the join without being placed by hand.
 	for i, a := range arcAngles(len(own), rx, ry) {
 		g.pos[own[i]] = [2]int{
 			g.cx + int(math.Round(float64(rx)*math.Cos(a))),
@@ -322,17 +276,15 @@ const cellAspect = 2.0
 // points on a circle. This only works because the loop is closed: see ringArc.
 //
 // The ellipse has no closed form for arc length, so walk it in fine steps, add up
-// the distance travelled, then place beads at equal fractions of the total. Two
-// thousand steps is far more than the ~55 beads need and still trivial to compute
-// once at startup.
+// the distance travelled, then place beads at equal fractions of the total.
 func arcAngles(n, rx, ry int) []float64 {
 	if n <= 1 {
 		return []float64{ringStart}
 	}
 
-	// 20000 steps, not 2000: the walk quantises every angle to a step boundary, and
-	// at 2000 that was enough to shift a big bead 0.18 degrees off the pentagon.
-	// Cheap insurance — this runs once, at startup.
+	// The walk quantises every angle to a step boundary, so the step count sets how
+	// precisely a bead can be placed: 2000 shifts a big bead 0.18 degrees off the
+	// pentagon. Cheap insurance — this runs once, at startup.
 	const steps = 20000
 	// Walk the circle, recording the cumulative VISUAL distance at each step.
 	dist := make([]float64, steps+1)
@@ -367,15 +319,14 @@ func arcAngles(n, rx, ry int) []float64 {
 	return angles
 }
 
-// spacedOut reports whether no two beads share or touch a cell.
+// spacedOut reports whether every bead gets a cell of its own.
 //
-// Without this the ring stops growing as soon as the text fits, and with many
-// beads they end up shoulder to shoulder — "○○" reads as a smear rather than as
-// two beads. Requiring a gap makes the ring grow until the perimeter is actually
-// long enough for the beads on it, which is the honest constraint: you cannot fit
-// 68 distinct beads on a ring of 60 cells.
-// n is how many beads sit ON THE RING — the pendant excluded, and beads that
-// share another's place excluded too, since they take no position of their own.
+// Without it the ring stops growing as soon as the text fits, and beads double up
+// and vanish. This is the honest constraint: you cannot fit 68 distinct beads on
+// a ring of 60 cells.
+//
+// n is how many beads sit ON THE RING — the pendant excluded, and beads sharing
+// another's place excluded too, since they take no position of their own.
 func spacedOut(n, rx, ry int) bool {
 	if n < 2 {
 		return true
@@ -387,9 +338,8 @@ func spacedOut(n, rx, ry int) bool {
 			ry + 1 - int(math.Round(float64(ry)*math.Sin(a))),
 		}
 		// Beads must not land on the SAME cell — that loses a bead entirely — but
-		// adjacent is fine: on a real rosary the beads touch. Requiring a gap
-		// instead forced the ring far larger than its contents needed, which with
-		// the mystery inside (a short label) left a vast empty hoop.
+		// adjacent is fine: on a real rosary the beads touch, and requiring a gap
+		// grows the ring into a vast empty hoop.
 		if p == prev {
 			return false
 		}
@@ -398,9 +348,10 @@ func spacedOut(n, rx, ry int) bool {
 	return true
 }
 
-// clears reports whether every bead sits clear of the text block, that is: for
-// any bead on a row the text occupies, the bead is at least half the text's
-// width plus a gutter away from the centre.
+// clears reports whether every bead sits clear of the text block: any bead on a
+// row the text occupies must be at least half the text's width plus a gutter from
+// the centre.
+//
 // It must agree exactly with where drawRosary puts things, so it works in the
 // same integer cell coordinates rather than in floats: a half-row disagreement
 // between the two is precisely how a bead ends up on a letter.
@@ -423,8 +374,8 @@ func clears(rx, ry, n, textW, textH int) bool {
 	return true
 }
 
-// drawRosary draws the ring, the pendant and the prayer inside, highlighting the
-// bead at cursor.
+// drawRosary draws the ring, the pendant and the given lines inside it — the
+// mystery, when one has been announced — highlighting the bead at cursor.
 //
 // Two passes, and the order matters: this one places plain runes on the grid, so
 // every cell is exactly one column wide and the arithmetic holds. styleGrid then
