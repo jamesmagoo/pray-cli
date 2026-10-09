@@ -62,6 +62,10 @@ func keyCode(key string) rune {
 		return ' '
 	case "left":
 		return tea.KeyLeft
+	case "enter":
+		return tea.KeyEnter
+	case "j":
+		return 'j'
 	case "x":
 		return 'x'
 	}
@@ -443,6 +447,7 @@ func TestXFadesOutFromEveryScreen(t *testing.T) {
 		name  string
 		setup func(m *model)
 	}{
+		{"opening", func(m *model) { m.phase = opening }},
 		{"chooser", func(m *model) { m.phase = choosing }},
 		{"praying", func(m *model) { m.phase = atPrayer }},
 		{"finished", func(m *model) { m.phase = finished }},
@@ -503,7 +508,7 @@ func TestEscapeHatchesSkipTheFarewell(t *testing.T) {
 		{"ctrl+c", tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			for _, phase := range []phase{choosing, atPrayer, finished, departing} {
+			for _, phase := range []phase{opening, choosing, atPrayer, finished, departing} {
 				m := praying(t)
 				m.phase = phase
 

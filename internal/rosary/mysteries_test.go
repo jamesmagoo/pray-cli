@@ -142,8 +142,13 @@ func TestChooserRunsFirstAndSpaceBegins(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// The opening comes first, and hands over to the chooser — never to a prayer.
+	if m.phase != opening {
+		t.Fatal("the rosary did not begin with the opening")
+	}
+	m = press(t, m, "space")
 	if m.phase != choosing {
-		t.Fatal("the rosary did not open on the chooser")
+		t.Fatal("the opening did not hand over to the chooser")
 	}
 	if !strings.Contains(render(m), Sorrowful.Name) {
 		t.Error("the chooser does not list the mysteries")
@@ -168,7 +173,7 @@ func TestChooserRunsFirstAndSpaceBegins(t *testing.T) {
 // Praying keys must do nothing while the chooser is up, or a stray space would
 // both choose and advance.
 func TestPrayingKeysAreInertWhileChoosing(t *testing.T) {
-	m, _ := newModel("en", Sorrowful)
+	m := mustModel(t)
 
 	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
 	if got := next.(model); got.cursor != 0 || got.phase != choosing {

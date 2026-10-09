@@ -8,7 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// The opening screen names the devotion, in full.
+// The chooser names the devotion, in full.
 func TestTheChooserNamesTheDevotion(t *testing.T) {
 	m, err := newModel("en", Sorrowful)
 	if err != nil {
@@ -19,7 +19,7 @@ func TestTheChooserNamesTheDevotion(t *testing.T) {
 
 	for _, want := range []string{rosaryTitle, rosarySubtitle} {
 		if !strings.Contains(screen, want) {
-			t.Errorf("the opening screen does not say %q:\n%s", want, screen)
+			t.Errorf("the chooser does not say %q:\n%s", want, screen)
 		}
 	}
 
@@ -37,7 +37,7 @@ func TestTheChooserNamesTheDevotion(t *testing.T) {
 // The heading's cross is the rosary's own, so the two cannot drift apart.
 //
 // Not a copy of the art: chooserHeading renders crossArt directly. Restyling the
-// crucifix in cross.go restyles the opening screen with it, which is the point of
+// crucifix in cross.go restyles the chooser with it, which is the point of
 // testing this rather than just testing that "a cross is shown".
 func TestTheChooserShowsTheRosarysOwnCross(t *testing.T) {
 	m, _ := newModel("en", Sorrowful)
@@ -45,7 +45,7 @@ func TestTheChooserShowsTheRosarysOwnCross(t *testing.T) {
 
 	for i, line := range crossArt {
 		if !strings.Contains(screen, strings.TrimSpace(line)) {
-			t.Errorf("row %d of the crucifix (%q) is not on the opening screen",
+			t.Errorf("row %d of the crucifix (%q) is not on the chooser",
 				i, strings.TrimSpace(line))
 		}
 	}
@@ -199,12 +199,15 @@ func TestTheChosenSetIsThePrayedSet(t *testing.T) {
 	}
 }
 
+// mustModel builds a model on the chooser, past the opening: what every chooser
+// test wants, and the opening is tested on its own in opening_test.go.
 func mustModel(t *testing.T) model {
 	t.Helper()
 	m, err := newModel("en", Sorrowful)
 	if err != nil {
 		t.Fatal(err)
 	}
+	m.choose()
 	return m
 }
 
@@ -314,7 +317,7 @@ func TestARuleDividesTheTitleFromTheList(t *testing.T) {
 		}
 	}
 	if rule < 0 {
-		t.Fatalf("no divider on the opening screen:\n%s", strings.Join(rows, "\n"))
+		t.Fatalf("no divider on the chooser:\n%s", strings.Join(rows, "\n"))
 	}
 	if title < 0 || firstSet < 0 {
 		t.Fatalf("title at %d, first set at %d; expected both", title, firstSet)

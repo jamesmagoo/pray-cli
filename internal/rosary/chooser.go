@@ -4,7 +4,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// The opening screen: the devotion's name under its crucifix, and the sets of
+// The chooser: the devotion's name under its crucifix, and the sets of
 // mysteries to choose between.
 //
 // A phase of the same model as the rosary itself (see phase.go), not a separate
@@ -91,7 +91,7 @@ func chooserHeading() string {
 	return lipgloss.JoinVertical(lipgloss.Center, rows...)
 }
 
-// The devotion's proper name, shown on the opening screen.
+// The devotion's proper name, shown on the chooser.
 const (
 	rosaryTitle    = "The Most Holy Rosary"
 	rosarySubtitle = "of the Blessed Virgin Mary"

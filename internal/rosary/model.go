@@ -32,7 +32,8 @@ type model struct {
 	// set is the mysteries being contemplated, chosen before praying begins.
 	set MysterySet
 
-	// phase is which screen is showing: the chooser, the rosary, or the close.
+	// phase is which screen is showing: the opening, the chooser, the rosary, or
+	// the close.
 	// All three are phases of the SAME model rather than separate programs — one
 	// Update, one View, and the rosary is already built behind the chooser, so
 	// beginning is instant and beginning again needs no reload.
@@ -66,6 +67,11 @@ type model struct {
 	// dark) and because it must reach 0 — the other two may be cut short by a key
 	// press, this one cannot be, or the program would quit mid-fade.
 	depart int
+
+	// open is the opening's own countdown: openingFrames -> 0, after which the
+	// chooser takes over. Separate from the others because, like depart, its END
+	// does something.
+	open int
 }
 
 // bead is the bead being prayed now.
@@ -179,7 +185,8 @@ func newModel(lang string, set MysterySet) (model, error) {
 		set:    set,
 		ring:   fixedRing(beads),
 		panelW: widestPrayer(beads),
-		phase:  choosing,
+		phase:  opening,
+		open:   openingFrames,
 	}, nil
 }
 
@@ -237,12 +244,25 @@ func (m *model) leave() tea.Cmd {
 }
 
 // Init runs once before the first View. It returns a command: a function the
-// runtime runs for us, whose result comes back as a message to Update. We have
-// nothing to do up front, so nil.
+// runtime runs for us, whose result comes back as a message to Update. The one
+// thing to do up front is start the opening's clock.
 //
 // (The terminal size arrives on its own as a WindowSizeMsg at startup, so we
 // don't have to ask for it.)
 func (m model) Init() tea.Cmd {
+	if m.phase == opening {
+		return tick()
+	}
+	return nil
+}
+
+// choose leaves the opening for the chooser.
+//
+// One method for both ways out — the opening running its course, and a key
+// cutting it short — so they cannot disagree about where they land.
+func (m *model) choose() tea.Cmd {
+	m.phase = choosing
+	m.open = 0
 	return nil
 }
 
@@ -277,6 +297,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tick()
 		}
 
+		// The opening, likewise, ends by doing something: handing over to the
+		// chooser. A frame that arrives after a key already did so finds open at 0
+		// and falls through to the shared case, which simply stops.
+		if m.phase == opening && m.open > 0 {
+			m.open--
+			if m.open <= 0 {
+				return m, m.choose()
+			}
+			return m, tick()
+		}
+
 		if m.glow > 0 {
 			m.glow--
 		}
@@ -299,6 +330,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// meaning two things at once — a space that both chooses a set and advances
 		// the first prayer.
 		switch m.phase {
+		case opening:
+			return m.updateOpening(msg)
 		case choosing:
 			return m.updateChoosing(msg)
 		case finished:
@@ -362,7 +395,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// updateChoosing handles keys on the opening screen: move the highlight, or begin.
+// updateOpening handles keys during the opening: any key skips to the chooser.
+//
+// ANY key, because someone pressing one wants to get on, and making them find the
+// right one to do it is a toll on every rosary. But the key is spent on the skip
+// and does nothing on the chooser: a space that skipped AND began would commit the
+// user to a set they never saw highlighted.
+//
+// x and the escape hatches mean what they mean everywhere else.
+func (m model) updateOpening(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "ctrl+c":
+		return m, tea.Quit
+	case "x":
+		return m, m.leave()
+	}
+	return m, m.choose()
+}
+
+// updateChoosing handles keys on the chooser: move the highlight, or begin.
 func (m model) updateChoosing(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "ctrl+c":

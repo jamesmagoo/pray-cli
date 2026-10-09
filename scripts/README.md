@@ -9,6 +9,8 @@ honestly be made. Escape sequences do not survive into a chat log or a diff —
 |---|---|
 | `swatch.sh` | Bead colours, with and without `Faint` |
 | `stars.sh` | Star glyphs, as the font actually paints them |
+| `art-options.sh` | The candidate styles for the opening's art, braille to colour blocks, one at a time |
+| `opening-art.sh` | Not a preview: renders the opening's Our Lady into `internal/rosary/art` (`just art`) |
 
 Each is self-contained: run it, look, decide.
 
