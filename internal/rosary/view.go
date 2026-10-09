@@ -30,6 +30,8 @@ var currentRest = lipgloss.Lighten(gold, 0.35)
 // compare the result without starting a program.
 func render(m model) string {
 	switch m.phase {
+	case opening:
+		return openingScreen(m)
 	case choosing:
 		return place(m, chooser(m))
 	case finished:
@@ -340,7 +342,7 @@ func beadStyle(k Kind, current bool, glow int) lipgloss.Style {
 	}
 }
 
-// Styles for the opening screen, and the text inside the ring.
+// Styles for the chooser, and the text inside the ring.
 var (
 	// The frame around the chooser. Padding(vertical, horizontal): without the
 	// vertical 1 the border sits directly on the crown of the cross and on the
@@ -353,7 +355,7 @@ var (
 	// The set's name is secondary to the mystery itself, so it is quieter.
 	setNameStyle = lipgloss.NewStyle().Foreground(gold).Faint(true)
 
-	// The opening screen's title, in the beads' blue and bold. Blue rather than the
+	// The chooser's title, in the beads' blue and bold. Blue rather than the
 	// gold used for every other title: it is Our Lady's name, and her colour.
 	rosaryTitleStyle = lipgloss.NewStyle().Foreground(beadBlue).Bold(true)
 

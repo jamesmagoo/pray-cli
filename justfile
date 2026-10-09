@@ -50,6 +50,11 @@ clean:
 install:
     go install ./cmd/pray
 
+# render the opening screen's art from demo/our_lady_4.jpg into internal/rosary/art
+# (needs imagemagick and chafa: brew install imagemagick chafa)
+art:
+    scripts/opening-art.sh
+
 # record the demo: demo/rosary.gif and demo/rosary.webm
 #
 # The tape drives the `pray` on PATH, so install first.

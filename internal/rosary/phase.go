@@ -1,6 +1,6 @@
 package rosary
 
-// phase is which of the three screens the program is showing.
+// phase is which screen the program is showing.
 //
 // It replaces a pair of booleans. Two flags (choosing, done) have four states of
 // which one is nonsense — choosing AND done at once — and every key handler would
@@ -10,9 +10,13 @@ package rosary
 type phase int
 
 const (
-	// choosing is the opening screen: which mysteries to contemplate. The rosary
-	// is already built behind it, so beginning is instant.
-	choosing phase = iota
+	// opening is the transition before everything else: Our Lady and "Ave Maria,
+	// ora pro nobis", rising out of the dark. It plays by itself and hands over to
+	// the chooser; any key hands over at once. See opening.go.
+	opening phase = iota
+	// choosing is the first screen with a choice on it: which mysteries to
+	// contemplate. The rosary is already built behind it, so beginning is instant.
+	choosing
 	// atPrayer is the rosary itself. (Named for the phase, not "praying", which
 	// is the test helper that builds a model already in it.)
 	atPrayer
