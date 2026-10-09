@@ -33,6 +33,12 @@ var ourLadySmall string
 // that fits the window, then none: a smaller terminal still gets the words.
 var ourLady = []picture{newPicture(ourLadyLarge), newPicture(ourLadySmall)}
 
+// artNudge is how many columns the picture is drawn left of centre, judged by
+// eye: the painting is not symmetric, and centring its box sat it a touch right
+// of the words. Only the art moves — the box keeps its width, so the words stay
+// exactly where they were.
+const artNudge = 2
+
 // The words under the picture. Latin, as the prayer is: "Hail Mary, pray for us."
 //
 // The salutation is letter-spaced, which is the nearest a terminal comes to the
@@ -171,13 +177,21 @@ type picture struct {
 // newPicture reads art as opening-art.sh writes it, padding every row to the
 // widest so the picture is a true rectangle and centres as one — the script
 // trims trailing spaces, and a ragged block would centre each row on its own.
+//
+// It then moves the art artNudge columns left inside that rectangle, taking blank
+// columns from the left edge and adding them on the right. Only as many as are
+// blank on every row: past that it would cut off the picture.
 func newPicture(s string) picture {
 	rows := strings.Split(strings.TrimRight(s, "\n"), "\n")
-	w := 0
+	w, blank := 0, artNudge
 	for _, r := range rows {
 		w = max(w, lipgloss.Width(r))
+		if strings.TrimSpace(r) != "" {
+			blank = min(blank, len(r)-len(strings.TrimLeft(r, " ")))
+		}
 	}
 	for i, r := range rows {
+		r = r[min(blank, len(r)-len(strings.TrimLeft(r, " "))):]
 		rows[i] = r + strings.Repeat(" ", w-lipgloss.Width(r))
 	}
 	return picture{text: strings.Join(rows, "\n"), w: w, h: len(rows)}
