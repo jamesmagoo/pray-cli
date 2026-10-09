@@ -49,8 +49,12 @@ Type "pray rosary"
 Sleep 400ms
 Enter
 
-# The opening screen: pick the mysteries.
-Sleep 1200ms
+# The opening: Our Lady and "Ave Maria, ora pro nobis", which hands over to the
+# chooser by itself after 6s.
+Sleep 6300ms
+
+# The chooser: pick the mysteries.
+Sleep 600ms
 Down
 Sleep 700ms
 Up
